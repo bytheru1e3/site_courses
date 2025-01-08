@@ -1,19 +1,27 @@
 import os
-import numpy as np
 from docx import Document
 import PyPDF2
 import logging
+from app.services.vector_db import VectorDB
 
 logger = logging.getLogger(__name__)
 
 class FileProcessor:
+    _vector_db = None
+
+    @classmethod
+    def get_vector_db(cls):
+        if cls._vector_db is None:
+            cls._vector_db = VectorDB()
+        return cls._vector_db
+
     @staticmethod
     def process_file(file_path):
         """Извлекает текст из файла и создает векторное представление"""
         try:
             # Получаем расширение файла
             file_ext = os.path.splitext(file_path)[1].lower()
-            
+
             # Извлекаем текст в зависимости от типа файла
             if file_ext == '.docx':
                 text = FileProcessor._process_docx(file_path)
@@ -22,9 +30,13 @@ class FileProcessor:
             else:
                 raise ValueError(f"Неподдерживаемый тип файла: {file_ext}")
 
-            # Создаем векторное представление (пока заглушка)
-            vector = FileProcessor._create_vector(text)
-            
+            # Создаем векторное представление
+            vector_db = FileProcessor.get_vector_db()
+            vector = vector_db.create_embedding(text)
+
+            # Добавляем документ в векторную базу
+            vector_db.add_document(text, file_path)
+
             return vector
 
         except Exception as e:
@@ -57,11 +69,7 @@ class FileProcessor:
             raise
 
     @staticmethod
-    def _create_vector(text):
-        """
-        Создает векторное представление текста
-        В данной реализации возвращает случайный вектор
-        """
-        # Заглушка - возвращаем случайный вектор
-        vector = np.random.rand(768).astype('float32')
-        return vector.tolist()
+    def search_similar_documents(query, top_k=3):
+        """Поиск похожих документов"""
+        vector_db = FileProcessor.get_vector_db()
+        return vector_db.search(query, top_k)
