@@ -13,8 +13,6 @@ auth = Blueprint('auth', __name__)
 @login_required
 def index():
     try:
-        logger.debug(f"[INDEX] User ID: {current_user.get_id()}")
-        logger.debug(f"[INDEX] Session data: {session}")
         courses = Course.query.order_by(Course.created_at.desc()).all()
         return render_template('index.html', courses=courses)
     except Exception as e:
@@ -37,37 +35,26 @@ def material(material_id):
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        logger.debug("[LOGIN] User is already authenticated, redirecting to index")
         return redirect(url_for('main.index'))
 
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        remember = True  # Всегда используем remember me для отладки
+        remember = True
 
         try:
             user = User.query.filter_by(username=username).first()
-            logger.debug(f"[LOGIN] Found user: {user is not None}")
-
             if user and user.check_password(password):
                 login_user(user, remember=remember)
-                session.permanent = True  # Делаем сессию постоянной
-
-                logger.info(f"[LOGIN] User {username} logged in successfully")
-                logger.debug(f"[LOGIN] User authenticated: {current_user.is_authenticated}")
-                logger.debug(f"[LOGIN] User active: {current_user.is_active}")
-                logger.debug(f"[LOGIN] Session data: {session}")
-                logger.debug(f"[LOGIN] Remember cookie set: {remember}")
+                session.permanent = True
 
                 next_page = request.args.get('next')
                 if not next_page or next_page == url_for('auth.login'):
                     next_page = url_for('main.index')
-                logger.debug(f"[LOGIN] Redirecting to: {next_page}")
 
                 return redirect(next_page)
 
             flash('Неверное имя пользователя или пароль', 'error')
-            logger.warning(f"[LOGIN] Failed login attempt for username: {username}")
 
         except Exception as e:
             logger.error(f"[LOGIN] Error during login process: {e}")
@@ -81,7 +68,7 @@ def logout():
     try:
         username = current_user.username
         logout_user()
-        session.clear()  # Очищаем всю сессию
+        session.clear()
         logger.info(f"[LOGOUT] User {username} logged out successfully")
         flash('Вы успешно вышли из системы', 'info')
     except Exception as e:
