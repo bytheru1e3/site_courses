@@ -5,7 +5,6 @@ import os
 from dotenv import load_dotenv
 import logging
 import asyncio
-import threading
 
 # Настройка логирования
 logging.basicConfig(
@@ -18,13 +17,9 @@ load_dotenv()
 
 app = create_app()
 
-def run_bot_forever():
-    """Запуск бота в отдельном потоке с собственным event loop"""
+async def run_bot():
+    """Асинхронный запуск бота"""
     try:
-        # Создаем новый event loop для этого потока
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
         bot_token = Config.TELEGRAM_BOT_TOKEN
         if not bot_token:
             logger.error("Telegram bot token not found in configuration")
@@ -32,15 +27,16 @@ def run_bot_forever():
 
         bot = CourseBot(bot_token)
         logger.info("Starting Telegram bot")
-
-        # Запускаем бота в event loop
-        loop.run_until_complete(bot.run_polling())
+        await bot.run_polling()
     except Exception as e:
         logger.error(f"Error starting Telegram bot: {e}")
-    finally:
-        loop.close()
 
-if __name__ == '__main__':
+def run_flask():
+    """Запуск Flask приложения"""
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+
+async def main():
+    """Основная функция для запуска всех компонентов"""
     with app.app_context():
         # Создание таблиц базы данных
         try:
@@ -60,15 +56,13 @@ if __name__ == '__main__':
             logger.error(f"Error creating database tables: {e}")
             raise
 
-    # Запуск бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot_forever)
-    bot_thread.daemon = True  # Поток завершится вместе с основной программой
-    bot_thread.start()
-    logger.info("Telegram bot thread started")
+    # Создаем и запускаем задачи
+    bot_task = asyncio.create_task(run_bot())
+    flask_task = asyncio.get_event_loop().run_in_executor(None, run_flask)
 
-    # Запуск Flask приложения
-    app.run(
-        host='0.0.0.0',
-        port=5000,
-        debug=True
-    )
+    # Ждем завершения обеих задач
+    await asyncio.gather(bot_task, flask_task)
+
+if __name__ == '__main__':
+    # Запускаем основной цикл событий
+    asyncio.run(main())
