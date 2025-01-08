@@ -5,6 +5,8 @@ from datetime import datetime
 import json
 
 class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     password_hash = db.Column(db.String(256))
@@ -17,6 +19,8 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
 class Course(db.Model):
+    __tablename__ = 'courses'
+
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(120), unique=True, nullable=False)
     description = db.Column(db.Text)
@@ -32,8 +36,10 @@ class Course(db.Model):
         }
 
 class Material(db.Model):
+    __tablename__ = 'materials'
+
     id = db.Column(db.Integer, primary_key=True)
-    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
     title = db.Column(db.String(120), nullable=False)
     content = db.Column(db.Text)
     vector = db.Column(db.Text)  # Хранение векторных эмбеддингов
@@ -46,6 +52,8 @@ class Material(db.Model):
         return json.loads(self.vector) if self.vector else None
 
 class ChatHistory(db.Model):
+    __tablename__ = 'chat_history'
+
     id = db.Column(db.Integer, primary_key=True)
     telegram_user_id = db.Column(db.String(32), nullable=False)
     message = db.Column(db.Text)

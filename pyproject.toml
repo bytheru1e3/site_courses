@@ -13,4 +13,5 @@ dependencies = [
     "python-telegram-bot>=21.10",
     "faiss-cpu>=1.9.0.post1",
     "numpy>=2.2.1",
+    "flask-wtf>=1.2.2",
 ]

@@ -18,19 +18,33 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
 
     from app.routes import main, auth
     app.register_blueprint(main)
     app.register_blueprint(auth)
 
     from app.models import User
+
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
 
-    # Создание таблиц при запуске
     with app.app_context():
-        db.create_all()
-        logger.info("Database tables created")
+        try:
+            db.create_all()
+            logger.info("Database tables created successfully")
+
+            # Создание администратора по умолчанию
+            admin = User.query.filter_by(username='admin').first()
+            if not admin:
+                admin = User(username='admin', is_admin=True)
+                admin.set_password('admin')
+                db.session.add(admin)
+                db.session.commit()
+                logger.info("Default admin user created")
+        except Exception as e:
+            logger.error(f"Error during database initialization: {e}")
+            raise
 
     return app

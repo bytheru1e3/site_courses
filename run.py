@@ -23,7 +23,7 @@ def run_bot():
         if not bot_token:
             logger.error("TELEGRAM_BOT_TOKEN not found in environment variables")
             return
-            
+
         bot = CourseBot(bot_token)
         logger.info("Starting Telegram bot")
         bot.run()
@@ -36,22 +36,23 @@ if __name__ == '__main__':
         try:
             db.create_all()
             logger.info("Database tables created successfully")
+
+            # Создание администратора по умолчанию, если его нет
+            from app.models import User
+            admin = User.query.filter_by(username='admin').first()
+            if not admin:
+                try:
+                    admin = User(username='admin', is_admin=True)
+                    admin.set_password('admin')
+                    db.session.add(admin)
+                    db.session.commit()
+                    logger.info("Default admin user created successfully")
+                except Exception as e:
+                    logger.error(f"Error creating default admin user: {e}")
+                    db.session.rollback()
         except Exception as e:
             logger.error(f"Error creating database tables: {e}")
             raise
-
-        # Создание администратора по умолчанию, если его нет
-        from app.models import User
-        if not User.query.filter_by(username='admin').first():
-            try:
-                admin = User(username='admin', is_admin=True)
-                admin.set_password('admin')  # В продакшене изменить на сложный пароль
-                db.session.add(admin)
-                db.session.commit()
-                logger.info("Default admin user created")
-            except Exception as e:
-                logger.error(f"Error creating default admin user: {e}")
-                db.session.rollback()
 
     # Запуск бота в отдельном потоке
     bot_thread = threading.Thread(target=run_bot, daemon=True)
