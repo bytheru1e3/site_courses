@@ -27,6 +27,10 @@ class VectorDB:
     def create_embedding(self, text):
         """Создание векторного представления текста"""
         try:
+            if not text or not isinstance(text, str):
+                logger.error("Получен невалидный текст для создания эмбеддинга")
+                return np.zeros(384).tolist()  # Возвращаем нулевой вектор в случае ошибки
+
             if not self.is_vectorizer_fitted:
                 # Если векторайзер еще не обучен, обучаем его на текущем тексте
                 vectors = self.vectorizer.fit_transform([text])
@@ -40,22 +44,24 @@ class VectorDB:
             return embedding.tolist()
         except Exception as e:
             logger.error(f"Ошибка при создании эмбеддинга: {e}")
-            raise
+            return np.zeros(384).tolist()  # Возвращаем нулевой вектор в случае ошибки
 
     def add_document(self, text, document_id):
         """Добавление документа в индекс"""
         try:
-            if text.strip():
-                self.documents.append({
-                    'id': document_id,
-                    'text': text
-                })
-                embedding = self.create_embedding(text)
-                embedding_array = np.array([embedding]).astype('float32')
-                self.index.add(embedding_array)
-                logger.info(f"Документ {document_id} успешно добавлен в базу")
-                self.save()
-                return True
+            if text and isinstance(text, str):
+                if not any(doc['id'] == document_id for doc in self.documents):
+                    self.documents.append({
+                        'id': document_id,
+                        'text': text
+                    })
+                    embedding = self.create_embedding(text)
+                    embedding_array = np.array([embedding]).astype('float32')
+                    self.index.add(embedding_array)
+                    logger.info(f"Документ {document_id} успешно добавлен в базу")
+                    self.save()
+                    return True
+            return False
         except Exception as e:
             logger.error(f"Ошибка при добавлении документа: {e}")
             return False
@@ -63,6 +69,9 @@ class VectorDB:
     def search(self, query, top_k=3):
         """Поиск похожих документов"""
         try:
+            if not query or not isinstance(query, str):
+                return []
+
             query_embedding = self.create_embedding(query)
             query_embedding = np.array([query_embedding]).astype('float32')
             distances, indices = self.index.search(query_embedding, top_k)

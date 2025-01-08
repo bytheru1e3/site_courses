@@ -23,53 +23,88 @@ class FileProcessor:
             file_ext = os.path.splitext(file_path)[1].lower()
 
             # Извлекаем текст в зависимости от типа файла
-            if file_ext == '.docx':
-                text = FileProcessor._process_docx(file_path)
-            elif file_ext == '.pdf':
-                text = FileProcessor._process_pdf(file_path)
-            else:
-                raise ValueError(f"Неподдерживаемый тип файла: {file_ext}")
+            text = ""
+            try:
+                if file_ext == '.docx':
+                    text = FileProcessor._process_docx(file_path)
+                elif file_ext == '.pdf':
+                    text = FileProcessor._process_pdf(file_path)
+                else:
+                    raise ValueError(f"Неподдерживаемый тип файла: {file_ext}")
+            except Exception as e:
+                logger.error(f"Ошибка при извлечении текста из файла {file_path}: {str(e)}")
+                text = "Ошибка при извлечении текста"
 
             # Создаем векторное представление
-            vector_db = FileProcessor.get_vector_db()
-            vector = vector_db.create_embedding(text)
+            try:
+                vector_db = FileProcessor.get_vector_db()
+                vector = vector_db.create_embedding(text)
 
-            # Добавляем документ в векторную базу
-            vector_db.add_document(text, file_path)
+                # Добавляем документ в векторную базу
+                vector_db.add_document(text, file_path)
 
-            return vector
+                return vector
+            except Exception as e:
+                logger.error(f"Ошибка при создании векторного представления: {str(e)}")
+                return []
 
         except Exception as e:
             logger.error(f"Ошибка при обработке файла {file_path}: {str(e)}")
-            raise
+            return []
 
     @staticmethod
     def _process_docx(file_path):
         """Извлекает текст из DOCX файла"""
         try:
+            text_parts = []
             doc = Document(file_path)
-            text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+
+            # Извлекаем текст из параграфов
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    text_parts.append(paragraph.text)
+
+            # Извлекаем текст из таблиц
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        if cell.text.strip():
+                            text_parts.append(cell.text)
+
+            text = '\n'.join(text_parts)
+            if not text.strip():
+                return "Документ пуст или не содержит текста"
             return text
         except Exception as e:
             logger.error(f"Ошибка при обработке DOCX файла: {str(e)}")
-            raise
+            return "Ошибка при чтении DOCX файла"
 
     @staticmethod
     def _process_pdf(file_path):
         """Извлекает текст из PDF файла"""
         try:
-            text = []
+            text_parts = []
             with open(file_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 for page in pdf_reader.pages:
-                    text.append(page.extract_text())
-            return '\n'.join(text)
+                    text = page.extract_text()
+                    if text.strip():
+                        text_parts.append(text)
+
+            text = '\n'.join(text_parts)
+            if not text.strip():
+                return "PDF документ пуст или не содержит текста"
+            return text
         except Exception as e:
             logger.error(f"Ошибка при обработке PDF файла: {str(e)}")
-            raise
+            return "Ошибка при чтении PDF файла"
 
     @staticmethod
     def search_similar_documents(query, top_k=3):
         """Поиск похожих документов"""
-        vector_db = FileProcessor.get_vector_db()
-        return vector_db.search(query, top_k)
+        try:
+            vector_db = FileProcessor.get_vector_db()
+            return vector_db.search(query, top_k)
+        except Exception as e:
+            logger.error(f"Ошибка при поиске документов: {str(e)}")
+            return []
