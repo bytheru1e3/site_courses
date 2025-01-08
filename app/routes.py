@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session
 from flask_login import login_required, login_user, logout_user, current_user
 from app.models import User, Course, Material
 from app import db
@@ -15,11 +15,7 @@ vector_search = VectorSearch()
 @login_required
 def index():
     try:
-        logger.debug(f"User {current_user.username} accessing index page")
-        if not current_user.is_authenticated:
-            logger.warning("Unauthenticated user trying to access index page")
-            return redirect(url_for('auth.login'))
-
+        logger.debug(f"User {current_user.username if current_user else 'anonymous'} accessing index page")
         courses = Course.query.order_by(Course.created_at.desc()).all()
         return render_template('index.html', courses=courses)
     except Exception as e:
@@ -39,37 +35,30 @@ def material(material_id):
     material = Material.query.get_or_404(material_id)
     return render_template('material.html', material=material)
 
-
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
-    # Если пользователь уже авторизован, перенаправляем на главную
     if current_user.is_authenticated:
-        logger.debug(f"Already authenticated user {current_user.username} accessing login page")
         return redirect(url_for('main.index'))
 
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
+        remember = True  # Always use remember me
 
         try:
             user = User.query.filter_by(username=username).first()
 
             if user and user.check_password(password):
-                # Успешная авторизация
-                logger.info(f"User {username} credentials verified")
-                login_user(user, remember=True)
+                session.permanent = True
+                login_user(user, remember=remember)
                 logger.info(f"User {username} logged in successfully")
 
-                # Получаем next параметр для редиректа
                 next_page = request.args.get('next')
-                # Проверяем безопасность next параметра
-                if not next_page or next_page == '/login':
+                if not next_page or next_page == url_for('auth.login'):
                     next_page = url_for('main.index')
 
-                logger.debug(f"Redirecting to: {next_page}")
                 return redirect(next_page)
 
-            # Неверные учетные данные
             flash('Неверное имя пользователя или пароль', 'error')
             logger.warning(f"Failed login attempt for username: {username}")
 
@@ -85,6 +74,7 @@ def logout():
     try:
         username = current_user.username
         logout_user()
+        session.clear()
         logger.info(f"User {username} logged out successfully")
         flash('Вы успешно вышли из системы', 'info')
     except Exception as e:

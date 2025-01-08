@@ -23,7 +23,6 @@ def create_app():
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
     login_manager.login_message_category = 'info'
-    login_manager.session_protection = 'strong'
 
     from app.routes import main, auth
     app.register_blueprint(main)
