@@ -4,6 +4,7 @@ from app.config import Config
 import os
 from dotenv import load_dotenv
 import logging
+import asyncio
 import threading
 
 # Настройка логирования
@@ -17,9 +18,13 @@ load_dotenv()
 
 app = create_app()
 
-def run_bot():
-    """Запуск Telegram бота в отдельном потоке"""
+def run_bot_forever():
+    """Запуск бота в отдельном потоке с собственным event loop"""
     try:
+        # Создаем новый event loop для этого потока
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         bot_token = Config.TELEGRAM_BOT_TOKEN
         if not bot_token:
             logger.error("Telegram bot token not found in configuration")
@@ -27,9 +32,13 @@ def run_bot():
 
         bot = CourseBot(bot_token)
         logger.info("Starting Telegram bot")
-        bot.run()
+
+        # Запускаем бота в event loop
+        loop.run_until_complete(bot.run_polling())
     except Exception as e:
         logger.error(f"Error starting Telegram bot: {e}")
+    finally:
+        loop.close()
 
 if __name__ == '__main__':
     with app.app_context():
@@ -52,7 +61,7 @@ if __name__ == '__main__':
             raise
 
     # Запуск бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot)
+    bot_thread = threading.Thread(target=run_bot_forever)
     bot_thread.daemon = True  # Поток завершится вместе с основной программой
     bot_thread.start()
     logger.info("Telegram bot thread started")

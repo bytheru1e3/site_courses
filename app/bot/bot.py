@@ -107,7 +107,14 @@ class CourseBot:
                 text="❌ Извините, произошла ошибка при обработке вашего сообщения"
             )
 
+    async def run_polling(self):
+        """Асинхронный запуск бота"""
+        await self.application.initialize()
+        await self.application.start()
+        await self.application.run_polling()
+
     def run(self):
-        """Запуск бота"""
-        self.application.run_polling()
-        logger.info("Bot started polling")
+        """Метод для обратной совместимости"""
+        logger.warning("Using deprecated run() method. Use run_polling() instead")
+        import asyncio
+        asyncio.run(self.run_polling())
