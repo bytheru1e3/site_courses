@@ -65,6 +65,7 @@ def create_app():
                 db.session.add(admin)
                 db.session.commit()
                 logger.info("Default admin user created")
+
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")
             db.session.rollback()

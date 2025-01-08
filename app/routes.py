@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
-from flask_login import login_required, current_user
-from app.models import Course, Material, MaterialFile
+from flask_login import login_required, current_user, login_user
+from app.models import Course, Material, MaterialFile, User
 from app import db
 import logging
 from app.services.file_processor import FileProcessor
@@ -21,6 +21,14 @@ def index():
     """
     try:
         logger.info("Доступ к главной странице")
+
+        # Автоматический вход администратора
+        if not current_user.is_authenticated:
+            admin = User.query.filter_by(username='admin').first()
+            if admin:
+                login_user(admin)
+                logger.info("Admin user automatically logged in")
+
         courses = Course.query.order_by(Course.created_at.desc()).all()
         is_admin = current_user.is_authenticated and current_user.is_admin
 
