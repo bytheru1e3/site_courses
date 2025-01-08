@@ -12,8 +12,8 @@ class CourseBot:
     def __init__(self, token):
         self.application = ApplicationBuilder().token(token).build()
         self.vector_search = VectorSearch()
-        self.chat_id = Config.TELEGRAM_CHAT_ID
         self.setup_handlers()
+        logger.info("Bot initialized with handlers")
 
     def setup_handlers(self):
         """Настройка обработчиков команд"""
@@ -21,9 +21,11 @@ class CourseBot:
         self.application.add_handler(CommandHandler("help", self.help))
         self.application.add_handler(CommandHandler("courses", self.list_courses))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        logger.info("Handlers setup completed")
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
+        logger.info(f"Received /start command from chat {update.effective_chat.id}")
         welcome_text = """
         👋 Привет! Я бот поддержки курсов.
 
@@ -33,11 +35,12 @@ class CourseBot:
 
         Используйте /help для просмотра доступных команд.
         """
-        await context.bot.send_message(chat_id=self.chat_id, text=welcome_text)
-        logger.info(f"Sent welcome message to chat {self.chat_id}")
+        await update.message.reply_text(welcome_text)
+        logger.info(f"Sent welcome message to chat {update.effective_chat.id}")
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /help"""
+        logger.info(f"Received /help command from chat {update.effective_chat.id}")
         help_text = """
         📚 Доступные команды:
         /start - Начать работу с ботом
@@ -46,14 +49,16 @@ class CourseBot:
 
         ❓ Вы также можете задать мне вопрос по материалам курсов!
         """
-        await context.bot.send_message(chat_id=self.chat_id, text=help_text)
+        await update.message.reply_text(help_text)
+        logger.info(f"Sent help message to chat {update.effective_chat.id}")
 
     async def list_courses(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /courses"""
+        logger.info(f"Received /courses command from chat {update.effective_chat.id}")
         try:
             courses = Course.query.all()
             if not courses:
-                await context.bot.send_message(chat_id=self.chat_id, text="📝 Пока нет доступных курсов")
+                await update.message.reply_text("📝 Пока нет доступных курсов")
                 return
 
             courses_text = "📚 Доступные курсы:\n\n"
@@ -63,19 +68,19 @@ class CourseBot:
                     courses_text += f"└ {course.description}\n"
                 courses_text += f"└ Материалов: {len(course.materials)}\n\n"
 
-            await context.bot.send_message(chat_id=self.chat_id, text=courses_text)
-            logger.info(f"Sent courses list to chat {self.chat_id}")
+            await update.message.reply_text(courses_text)
+            logger.info(f"Sent courses list to chat {update.effective_chat.id}")
         except Exception as e:
             logger.error(f"Error listing courses: {e}")
-            await context.bot.send_message(
-                chat_id=self.chat_id,
-                text="❌ Произошла ошибка при получении списка курсов"
+            await update.message.reply_text(
+                "❌ Произошла ошибка при получении списка курсов"
             )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений"""
         user_message = update.message.text
         user_id = str(update.effective_user.id)
+        logger.info(f"Received message from user {user_id}: {user_message}")
 
         try:
             # Поиск релевантных материалов
@@ -97,24 +102,19 @@ class CourseBot:
             db.session.add(chat_history)
             db.session.commit()
 
-            await context.bot.send_message(chat_id=self.chat_id, text=response)
-            logger.info(f"Processed message from user {user_id}")
+            await update.message.reply_text(response)
+            logger.info(f"Processed message from user {user_id} and sent response")
 
         except Exception as e:
             logger.error(f"Error handling message: {e}")
-            await context.bot.send_message(
-                chat_id=self.chat_id,
-                text="❌ Извините, произошла ошибка при обработке вашего сообщения"
+            await update.message.reply_text(
+                "❌ Извините, произошла ошибка при обработке вашего сообщения"
             )
 
     async def run_polling(self):
         """Асинхронный запуск бота"""
+        logger.info("Starting bot polling")
         await self.application.initialize()
         await self.application.start()
         await self.application.run_polling()
-
-    def run(self):
-        """Метод для обратной совместимости"""
-        logger.warning("Using deprecated run() method. Use run_polling() instead")
-        import asyncio
-        asyncio.run(self.run_polling())
+        logger.info("Bot polling started")
