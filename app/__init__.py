@@ -46,31 +46,15 @@ def create_app():
     app.register_blueprint(api)
     app.register_blueprint(admin)
 
-    # Создание таблиц базы данных и администратора по умолчанию
+    # Регистрация CLI команд
+    from app.cli import create_admin
+    app.cli.add_command(create_admin)
+
+    # Создание таблиц базы данных
     with app.app_context():
         try:
             db.create_all()
             logger.info("Database tables created successfully")
-
-            # Создание администратора по умолчанию, если его нет
-            from app.models import User
-            admin = User.query.filter_by(username='admin').first()
-            if not admin:
-                admin = User(
-                    username='admin',
-                    email='admin@example.com',
-                    is_admin=True
-                )
-                admin.set_password('admin')  # Устанавливаем пароль 'admin'
-                db.session.add(admin)
-                db.session.commit()
-                logger.info("Default admin user created with password 'admin'")
-            else:
-                # Сброс пароля администратора на значение по умолчанию
-                admin.set_password('admin')
-                db.session.commit()
-                logger.info("Admin password reset to 'admin'")
-
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")
             db.session.rollback()

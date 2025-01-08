@@ -11,27 +11,12 @@ class NotificationType(Enum):
     WARNING = 'warning'
     ERROR = 'error'
 
-class Course(db.Model):
-    __tablename__ = 'courses'
-
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(120), nullable=False)
-    description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-
-    # Relationships
-    materials = db.relationship('Material', backref='course', lazy=True, cascade='all, delete-orphan')
-
-    def __repr__(self):
-        return f'<Course {self.title}>'
-
 # Таблица для связи many-to-many между пользователями и курсами
 course_users = db.Table('course_users',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
-    db.Column('course_id', db.Integer, db.ForeignKey('courses.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('course_id', db.Integer, db.ForeignKey('courses.id', ondelete='CASCADE'), primary_key=True),
     db.Column('granted_at', db.DateTime, default=datetime.utcnow),
-    db.Column('granted_by', db.Integer, db.ForeignKey('users.id'))
+    db.Column('granted_by', db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
 )
 
 class User(UserMixin, db.Model):
@@ -49,15 +34,16 @@ class User(UserMixin, db.Model):
     courses_created = db.relationship('Course', backref='author', lazy=True, 
                                     foreign_keys='Course.user_id',
                                     cascade='all, delete-orphan')
-    notifications = db.relationship('Notification', backref='user', lazy=True, cascade='all, delete-orphan')
+    notifications = db.relationship('Notification', backref='user', lazy=True, 
+                                  cascade='all, delete-orphan')
 
     # Доступные курсы (для обычных пользователей)
     available_courses = db.relationship('Course', 
-                                     secondary=course_users,
-                                     primaryjoin=(id == course_users.c.user_id),
-                                     secondaryjoin=(Course.id == course_users.c.course_id),
-                                     lazy='dynamic',
-                                     backref=db.backref('allowed_users', lazy='dynamic'))
+                                      secondary=course_users,
+                                      primaryjoin='User.id == course_users.c.user_id',
+                                      secondaryjoin='Course.id == course_users.c.course_id',
+                                      lazy='dynamic',
+                                      backref=db.backref('allowed_users', lazy='dynamic'))
 
     def set_password(self, password):
         if not password:
@@ -84,11 +70,64 @@ class User(UserMixin, db.Model):
     def __repr__(self):
         return f'<User {self.username}>'
 
+class Course(db.Model):
+    __tablename__ = 'courses'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+
+    # Relationships
+    materials = db.relationship('Material', backref='course', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<Course {self.title}>'
+
+class Material(db.Model):
+    __tablename__ = 'materials'
+
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    title = db.Column(db.String(120), nullable=False)
+    content = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    vector = db.Column(db.Text)  # Для хранения векторных эмбеддингов
+
+    # Relationships
+    files = db.relationship('MaterialFile', backref='material', lazy=True, cascade='all, delete-orphan')
+
+    def set_vector(self, vector_data):
+        self.vector = json.dumps(vector_data)
+
+    def get_vector(self):
+        return json.loads(self.vector) if self.vector else None
+
+class MaterialFile(db.Model):
+    __tablename__ = 'material_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+    material_id = db.Column(db.Integer, db.ForeignKey('materials.id', ondelete='CASCADE'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(512), nullable=False)
+    file_type = db.Column(db.String(10), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_indexed = db.Column(db.Boolean, default=False)
+    vector = db.Column(db.Text)
+
+    def set_vector(self, vector_data):
+        self.vector = json.dumps(vector_data)
+        self.is_indexed = True
+
+    def get_vector(self):
+        return json.loads(self.vector) if self.vector else None
+
 class Notification(db.Model):
     __tablename__ = 'notifications'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     type = db.Column(db.String(20), nullable=False, default=NotificationType.INFO.value)
     title = db.Column(db.String(120), nullable=False)
     message = db.Column(db.Text, nullable=False)
@@ -113,41 +152,3 @@ class Notification(db.Model):
             'created_at': self.created_at.isoformat(),
             'read_at': self.read_at.isoformat() if self.read_at else None
         }
-
-class Material(db.Model):
-    __tablename__ = 'materials'
-
-    id = db.Column(db.Integer, primary_key=True)
-    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
-    title = db.Column(db.String(120), nullable=False)
-    content = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    vector = db.Column(db.Text)  # Для хранения векторных эмбеддингов
-
-    # Relationships
-    files = db.relationship('MaterialFile', backref='material', lazy=True, cascade='all, delete-orphan')
-
-    def set_vector(self, vector_data):
-        self.vector = json.dumps(vector_data)
-
-    def get_vector(self):
-        return json.loads(self.vector) if self.vector else None
-
-class MaterialFile(db.Model):
-    __tablename__ = 'material_files'
-
-    id = db.Column(db.Integer, primary_key=True)
-    material_id = db.Column(db.Integer, db.ForeignKey('materials.id'), nullable=False)
-    filename = db.Column(db.String(255), nullable=False)
-    file_path = db.Column(db.String(512), nullable=False)
-    file_type = db.Column(db.String(10), nullable=False)
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    is_indexed = db.Column(db.Boolean, default=False)
-    vector = db.Column(db.Text)
-
-    def set_vector(self, vector_data):
-        self.vector = json.dumps(vector_data)
-        self.is_indexed = True
-
-    def get_vector(self):
-        return json.loads(self.vector) if self.vector else None

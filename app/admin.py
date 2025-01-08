@@ -13,6 +13,7 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
+            logger.warning(f"Попытка доступа к админ-панели пользователем {current_user.username if current_user.is_authenticated else 'unauthorized'}")
             flash('У вас нет прав для доступа к этой странице', 'error')
             return redirect(url_for('main.index'))
         return f(*args, **kwargs)
@@ -23,34 +24,54 @@ def admin_required(f):
 @admin_required
 def index():
     """Главная страница административной панели"""
-    stats = {
-        'users_count': User.query.count(),
-        'courses_count': Course.query.count(),
-        'materials_count': Material.query.count(),
-        'files_count': MaterialFile.query.count()
-    }
-    return render_template('admin/index.html', stats=stats)
+    try:
+        stats = {
+            'users_count': User.query.count(),
+            'courses_count': Course.query.count(),
+            'materials_count': Material.query.count(),
+            'files_count': MaterialFile.query.count()
+        }
+        return render_template('admin/index.html', stats=stats)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке статистики: {str(e)}")
+        flash('Ошибка при загрузке статистики', 'error')
+        return redirect(url_for('main.index'))
 
 @admin.route('/users')
 @login_required
 @admin_required
 def users():
     """Список всех пользователей"""
-    users = User.query.order_by(User.created_at.desc()).all()
-    return render_template('admin/users.html', users=users)
+    try:
+        users = User.query.order_by(User.created_at.desc()).all()
+        return render_template('admin/users.html', users=users)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке списка пользователей: {str(e)}")
+        flash('Ошибка при загрузке списка пользователей', 'error')
+        return redirect(url_for('admin.index'))
 
 @admin.route('/courses')
 @login_required
 @admin_required
 def courses():
     """Список всех курсов"""
-    courses = Course.query.order_by(Course.created_at.desc()).all()
-    return render_template('admin/courses.html', courses=courses)
+    try:
+        courses = Course.query.order_by(Course.created_at.desc()).all()
+        return render_template('admin/courses.html', courses=courses)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке списка курсов: {str(e)}")
+        flash('Ошибка при загрузке списка курсов', 'error')
+        return redirect(url_for('admin.index'))
 
 @admin.route('/files')
 @login_required
 @admin_required
 def files():
     """Список всех файлов"""
-    files = MaterialFile.query.order_by(MaterialFile.uploaded_at.desc()).all()
-    return render_template('admin/files.html', files=files)
+    try:
+        files = MaterialFile.query.order_by(MaterialFile.uploaded_at.desc()).all()
+        return render_template('admin/files.html', files=files)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке списка файлов: {str(e)}")
+        flash('Ошибка при загрузке списка файлов', 'error')
+        return redirect(url_for('admin.index'))
