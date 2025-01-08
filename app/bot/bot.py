@@ -10,53 +10,71 @@ logger = logging.getLogger(__name__)
 
 class CourseBot:
     def __init__(self, token):
-        self.application = ApplicationBuilder().token(token).build()
-        self.vector_search = VectorSearch()
-        self.setup_handlers()
-        logger.info("Bot initialized with handlers")
+        logger.info(f"Initializing bot with token: {token[:5]}...")
+        try:
+            self.application = ApplicationBuilder().token(token).build()
+            self.vector_search = VectorSearch()
+            self.setup_handlers()
+            logger.info("Bot initialization completed successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize bot: {e}")
+            raise
 
     def setup_handlers(self):
         """Настройка обработчиков команд"""
-        self.application.add_handler(CommandHandler("start", self.start))
-        self.application.add_handler(CommandHandler("help", self.help))
-        self.application.add_handler(CommandHandler("courses", self.list_courses))
-        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
-        logger.info("Handlers setup completed")
+        try:
+            self.application.add_handler(CommandHandler("start", self.start))
+            self.application.add_handler(CommandHandler("help", self.help))
+            self.application.add_handler(CommandHandler("courses", self.list_courses))
+            self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+            logger.info("All handlers were successfully registered")
+        except Exception as e:
+            logger.error(f"Error setting up handlers: {e}")
+            raise
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
-        logger.info(f"Received /start command from chat {update.effective_chat.id}")
-        welcome_text = """
-        👋 Привет! Я бот поддержки курсов.
+        try:
+            logger.info(f"Received /start command from chat {update.effective_chat.id}")
+            welcome_text = """
+            👋 Привет! Я бот поддержки курсов.
 
-        🔍 Я могу:
-        - Показать список доступных курсов
-        - Ответить на вопросы по материалам
+            🔍 Я могу:
+            - Показать список доступных курсов
+            - Ответить на вопросы по материалам
 
-        Используйте /help для просмотра доступных команд.
-        """
-        await update.message.reply_text(welcome_text)
-        logger.info(f"Sent welcome message to chat {update.effective_chat.id}")
+            Используйте /help для просмотра доступных команд.
+            """
+            await update.message.reply_text(welcome_text)
+            logger.info(f"Sent welcome message to chat {update.effective_chat.id}")
+        except Exception as e:
+            logger.error(f"Error in start command: {e}")
+            await update.message.reply_text("Произошла ошибка при обработке команды")
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /help"""
-        logger.info(f"Received /help command from chat {update.effective_chat.id}")
-        help_text = """
-        📚 Доступные команды:
-        /start - Начать работу с ботом
-        /help - Показать это сообщение
-        /courses - Показать список доступных курсов
+        try:
+            logger.info(f"Received /help command from chat {update.effective_chat.id}")
+            help_text = """
+            📚 Доступные команды:
+            /start - Начать работу с ботом
+            /help - Показать это сообщение
+            /courses - Показать список доступных курсов
 
-        ❓ Вы также можете задать мне вопрос по материалам курсов!
-        """
-        await update.message.reply_text(help_text)
-        logger.info(f"Sent help message to chat {update.effective_chat.id}")
+            ❓ Вы также можете задать мне вопрос по материалам курсов!
+            """
+            await update.message.reply_text(help_text)
+            logger.info(f"Sent help message to chat {update.effective_chat.id}")
+        except Exception as e:
+            logger.error(f"Error in help command: {e}")
+            await update.message.reply_text("Произошла ошибка при обработке команды")
 
     async def list_courses(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /courses"""
-        logger.info(f"Received /courses command from chat {update.effective_chat.id}")
         try:
+            logger.info(f"Received /courses command from chat {update.effective_chat.id}")
             courses = Course.query.all()
+
             if not courses:
                 await update.message.reply_text("📝 Пока нет доступных курсов")
                 return
@@ -78,11 +96,11 @@ class CourseBot:
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений"""
-        user_message = update.message.text
-        user_id = str(update.effective_user.id)
-        logger.info(f"Received message from user {user_id}: {user_message}")
-
         try:
+            user_message = update.message.text
+            user_id = str(update.effective_user.id)
+            logger.info(f"Received message from user {user_id}: {user_message}")
+
             # Поиск релевантных материалов
             search_results = self.vector_search.search(user_message)
 
@@ -113,8 +131,12 @@ class CourseBot:
 
     async def run_polling(self):
         """Асинхронный запуск бота"""
-        logger.info("Starting bot polling")
-        await self.application.initialize()
-        await self.application.start()
-        await self.application.run_polling()
-        logger.info("Bot polling started")
+        try:
+            logger.info("Starting bot polling")
+            await self.application.initialize()
+            await self.application.start()
+            await self.application.run_polling()
+            logger.info("Bot polling started successfully")
+        except Exception as e:
+            logger.error(f"Error during bot polling: {e}")
+            raise

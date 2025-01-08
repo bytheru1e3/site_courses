@@ -1,5 +1,9 @@
 import os
 import secrets
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
 
 class Config:
     # Flask
@@ -14,4 +18,4 @@ class Config:
     REMEMBER_COOKIE_SECURE = False
 
     # Telegram
-    TELEGRAM_BOT_TOKEN = "7884948980:AAFSmEjRYMvE-tgv82wWquqd2v0_L6C-Pd8"
+    TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', "7884948980:AAFSmEjRYMvE-tgv82wWquqd2v0_L6C-Pd8")
