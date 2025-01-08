@@ -40,20 +40,44 @@
                 </h4>
                 <div class="list-group">
                     {% for file in material.files %}
-                    <a href="{{ url_for('main.download_file', file_id=file.id) }}" 
-                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        <div>
-                            {% if file.file_type == 'pdf' %}
-                            <i class="bi bi-file-pdf me-2 text-danger"></i>
-                            {% else %}
-                            <i class="bi bi-file-word me-2 text-primary"></i>
-                            {% endif %}
-                            {{ file.filename }}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <a href="{{ url_for('main.download_file', file_id=file.id) }}" 
+                                   class="me-3">
+                                    {% if file.file_type == 'pdf' %}
+                                    <i class="bi bi-file-pdf me-2 text-danger"></i>
+                                    {% else %}
+                                    <i class="bi bi-file-word me-2 text-primary"></i>
+                                    {% endif %}
+                                    {{ file.filename }}
+                                </a>
+                                {% if file.is_indexed %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle me-1"></i>Проиндексировано
+                                </span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-exclamation-circle me-1"></i>Не проиндексировано
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <small class="text-muted me-3">
+                                    {{ file.uploaded_at.strftime('%d.%m.%Y %H:%M') }}
+                                </small>
+                                <form action="{{ url_for('main.reindex_file', file_id=file.id) }}" 
+                                      method="POST" 
+                                      class="m-0">
+                                    <button type="submit" 
+                                            class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-arrow-clockwise me-1"></i>
+                                        Переиндексировать
+                                    </button>
+                                </form>
+                            </div>
                         </div>
-                        <small class="text-muted">
-                            {{ file.uploaded_at.strftime('%d.%m.%Y %H:%M') }}
-                        </small>
-                    </a>
+                    </div>
                     {% endfor %}
                 </div>
             </div>

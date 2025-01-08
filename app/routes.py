@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, request, send_from_directory, current_app
 from werkzeug.utils import secure_filename
 from app.models import Course, Material, MaterialFile
+from app.services.file_processor import FileProcessor # Added import
 from app import db
 import logging
 import os
@@ -17,6 +18,19 @@ ALLOWED_EXTENSIONS = {'docx', 'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def process_and_index_file(material_file):
+    """Обработка и индексация файла"""
+    try:
+        file_path = os.path.join(UPLOAD_FOLDER, material_file.file_path)
+        vector = FileProcessor.process_file(file_path)
+        material_file.set_vector(vector)
+        db.session.commit()
+        logger.info(f"Файл {material_file.filename} успешно проиндексирован")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка при индексации файла {material_file.filename}: {str(e)}")
+        return False
 
 @main.route('/')
 def index():
@@ -58,10 +72,8 @@ def add_material(course_id):
 @main.route('/edit_material/<int:material_id>', methods=['POST'])
 def edit_material(material_id):
     material = Material.query.get_or_404(material_id)
-
     material.title = request.form.get('title')
     material.content = request.form.get('content')
-
     db.session.commit()
     return redirect(url_for('main.material', material_id=material_id))
 
@@ -69,10 +81,8 @@ def edit_material(material_id):
 def delete_material(material_id):
     material = Material.query.get_or_404(material_id)
     course_id = material.course_id
-
     db.session.delete(material)
     db.session.commit()
-
     return redirect(url_for('main.course', course_id=course_id))
 
 @main.route('/upload_file/<int:material_id>', methods=['POST'])
@@ -105,7 +115,16 @@ def upload_file(material_id):
         db.session.add(material_file)
         db.session.commit()
 
+        # Индексируем файл
+        process_and_index_file(material_file) # Added function call
+
     return redirect(url_for('main.material', material_id=material_id))
+
+@main.route('/reindex_file/<int:file_id>', methods=['POST']) # Added route
+def reindex_file(file_id):
+    material_file = MaterialFile.query.get_or_404(file_id)
+    process_and_index_file(material_file)
+    return redirect(url_for('main.material', material_id=material_file.material_id))
 
 @main.route('/download_file/<int:file_id>')
 def download_file(file_id):

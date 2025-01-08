@@ -63,6 +63,15 @@ class MaterialFile(db.Model):
     file_path = db.Column(db.String(512), nullable=False)
     file_type = db.Column(db.String(10), nullable=False)  # 'pdf' или 'docx'
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_indexed = db.Column(db.Boolean, default=False)
+    vector = db.Column(db.Text)  # Хранение векторных эмбеддингов
+
+    def set_vector(self, vector_data):
+        self.vector = json.dumps(vector_data)
+        self.is_indexed = True
+
+    def get_vector(self):
+        return json.loads(self.vector) if self.vector else None
 
 class ChatHistory(db.Model):
     __tablename__ = 'chat_history'
