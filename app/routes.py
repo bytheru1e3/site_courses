@@ -1,35 +1,35 @@
-from flask import Blueprint, render_template, redirect, url_for, request, send_from_directory, current_app, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
-from werkzeug.utils import secure_filename
-from app.models import Course, Material, MaterialFile
-from app.services.file_processor import FileProcessor
+from app.models import Course
 from app import db
 import logging
-import os
-import shutil
 
 logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
 
-# Создаем директорию для загруженных файлов
-UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-ALLOWED_EXTENSIONS = {'docx', 'pdf'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 @main.route('/')
 @login_required
 def index():
+    """
+    Главная страница с списком курсов.
+    Требует авторизации пользователя.
+    """
     try:
-        if current_user.is_admin:
-            courses = Course.query.order_by(Course.created_at.desc()).all()
+        logger.info(f"Доступ к главной странице: пользователь {current_user.username}")
+        courses = []
+        if current_user.is_authenticated:
+            if current_user.is_admin:
+                courses = Course.query.order_by(Course.created_at.desc()).all()
+            else:
+                courses = Course.query.filter_by(user_id=current_user.id).order_by(Course.created_at.desc()).all()
+
+            return render_template('index.html', 
+                                courses=courses, 
+                                is_admin=current_user.is_admin)
         else:
-            courses = Course.query.filter_by(user_id=current_user.id).order_by(Course.created_at.desc()).all()
-        return render_template('index.html', courses=courses, is_admin=current_user.is_admin)
+            logger.warning("Неавторизованный доступ к главной странице")
+            return redirect(url_for('auth.login'))
     except Exception as e:
         logger.error(f"Ошибка при загрузке главной страницы: {str(e)}")
         flash('Произошла ошибка при загрузке курсов', 'error')
@@ -254,3 +254,18 @@ def reindex_file(file_id):
 def download_file(file_id):
     material_file = MaterialFile.query.get_or_404(file_id)
     return send_from_directory(UPLOAD_FOLDER, material_file.file_path)
+
+from werkzeug.utils import secure_filename
+from app.models import Material, MaterialFile
+from app.services.file_processor import FileProcessor
+import os
+import shutil
+
+# Создаем директорию для загруженных файлов
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {'docx', 'pdf'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS

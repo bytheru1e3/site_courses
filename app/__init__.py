@@ -1,18 +1,21 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
-from app.config import Config
 import logging
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+# Инициализация расширений
 db = SQLAlchemy()
 login_manager = LoginManager()
 
 def create_app():
     app = Flask(__name__)
+
+    # Загрузка конфигурации
+    from app.config import Config
     app.config.from_object(Config)
 
     # Инициализация расширений
@@ -38,7 +41,7 @@ def create_app():
     app.register_blueprint(auth)
     app.register_blueprint(api)
 
-    # Инициализация базы данных
+    # Создание таблиц базы данных и администратора по умолчанию
     with app.app_context():
         try:
             db.create_all()
@@ -59,6 +62,6 @@ def create_app():
                 logger.info("Default admin user created")
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")
-            raise
+            db.session.rollback()
 
     return app

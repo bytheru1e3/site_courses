@@ -18,15 +18,12 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'connect_args': {
-            'connect_timeout': 10,
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5
-        }
     }
 
-    # Basic security settings for development
+    # Basic security settings
     SESSION_COOKIE_SECURE = False
     REMEMBER_COOKIE_SECURE = False
+
+    # Upload settings
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
