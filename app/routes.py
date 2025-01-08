@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
 auth = Blueprint('auth', __name__)
-vector_search = VectorSearch()
 
 @main.route('/')
 @login_required
@@ -20,6 +19,7 @@ def index():
         logger.debug(f"[INDEX] User ID: {current_user.get_id()}")
         logger.debug(f"[INDEX] Session data: {session}")
         logger.debug(f"[INDEX] Is user active: {current_user.is_active}")
+        logger.debug(f"[INDEX] Remember cookie: {request.cookies.get('remember_token')}")
 
         if not current_user.is_authenticated:
             logger.warning("[INDEX] User not authenticated, redirecting to login")
@@ -54,7 +54,7 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        remember = True
+        remember = True  # Всегда используем remember me для отладки
 
         try:
             user = User.query.filter_by(username=username).first()
@@ -62,10 +62,13 @@ def login():
 
             if user and user.check_password(password):
                 login_user(user, remember=remember)
+                session.permanent = True  # Делаем сессию постоянной
+
                 logger.info(f"[LOGIN] User {username} logged in successfully")
                 logger.debug(f"[LOGIN] User authenticated: {current_user.is_authenticated}")
                 logger.debug(f"[LOGIN] User active: {current_user.is_active}")
                 logger.debug(f"[LOGIN] Session data: {session}")
+                logger.debug(f"[LOGIN] Remember cookie set: {remember}")
 
                 next_page = request.args.get('next')
                 if not next_page or next_page == url_for('auth.login'):
@@ -89,7 +92,7 @@ def logout():
     try:
         username = current_user.username
         logout_user()
-        session.clear()
+        session.clear()  # Очищаем всю сессию
         logger.info(f"[LOGOUT] User {username} logged out successfully")
         flash('Вы успешно вышли из системы', 'info')
     except Exception as e:

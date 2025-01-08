@@ -15,12 +15,13 @@ class Config:
     }
 
     # Flask-Login
-    SESSION_PROTECTION = 'strong'
-    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
-    SESSION_TYPE = 'filesystem'
-    REMEMBER_COOKIE_DURATION = timedelta(days=1)
+    SESSION_PROTECTION = None  # Отключаем временно для отладки
+    PERMANENT_SESSION_LIFETIME = timedelta(days=1)  # Увеличиваем время жизни сессии
+    REMEMBER_COOKIE_DURATION = timedelta(days=7)
+    REMEMBER_COOKIE_REFRESH_EACH_REQUEST = True
     REMEMBER_COOKIE_HTTPONLY = True
-    REMEMBER_COOKIE_SECURE = False  # Set to True in production
+    REMEMBER_COOKIE_SECURE = False  # В development окружении отключаем HTTPS
+    SESSION_COOKIE_SECURE = False   # В development окружении отключаем HTTPS
 
     # Telegram
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
