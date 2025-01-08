@@ -26,7 +26,11 @@ def init_database():
             from app.models import User
             admin = User.query.filter_by(username='admin').first()
             if not admin:
-                admin = User(username='admin', is_admin=True)
+                admin = User(
+                    username='admin',
+                    email='admin@example.com',
+                    is_admin=True
+                )
                 admin.set_password('admin')
                 db.session.add(admin)
                 db.session.commit()
