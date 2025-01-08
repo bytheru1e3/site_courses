@@ -39,10 +39,12 @@ def create_app():
     from app.routes import main
     from app.auth import auth
     from app.api import api
+    from app.admin import admin
 
     app.register_blueprint(main)
     app.register_blueprint(auth)
     app.register_blueprint(api)
+    app.register_blueprint(admin)
 
     # Создание таблиц базы данных и администратора по умолчанию
     with app.app_context():
