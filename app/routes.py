@@ -21,19 +21,6 @@ ALLOWED_EXTENSIONS = {'docx', 'pdf'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def process_and_index_file(material_file):
-    """Обработка и индексация файла"""
-    try:
-        file_path = os.path.join(UPLOAD_FOLDER, material_file.file_path)
-        vector = FileProcessor.process_file(file_path)
-        material_file.set_vector(vector)
-        db.session.commit()
-        logger.info(f"Файл {material_file.filename} успешно проиндексирован")
-        return True
-    except Exception as e:
-        logger.error(f"Ошибка при индексации файла {material_file.filename}: {str(e)}")
-        return False
-
 @main.route('/')
 @login_required
 def index():
@@ -47,6 +34,19 @@ def index():
         logger.error(f"Ошибка при загрузке главной страницы: {str(e)}")
         flash('Произошла ошибка при загрузке курсов', 'error')
         return redirect(url_for('auth.login'))
+
+def process_and_index_file(material_file):
+    """Обработка и индексация файла"""
+    try:
+        file_path = os.path.join(UPLOAD_FOLDER, material_file.file_path)
+        vector = FileProcessor.process_file(file_path)
+        material_file.set_vector(vector)
+        db.session.commit()
+        logger.info(f"Файл {material_file.filename} успешно проиндексирован")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка при индексации файла {material_file.filename}: {str(e)}")
+        return False
 
 @main.route('/course/<int:course_id>')
 @login_required

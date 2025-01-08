@@ -58,7 +58,6 @@ def register():
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
-    # Если пользователь уже авторизован, перенаправляем его на главную страницу
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
 
@@ -67,14 +66,19 @@ def login():
         password = request.form.get('password')
         remember = True if request.form.get('remember') else False
 
+        if not username or not password:
+            flash('Пожалуйста, заполните все поля', 'error')
+            return render_template('auth/login.html')
+
         try:
-            # Проверяем наличие пользователя и правильность пароля
             user = User.query.filter_by(username=username).first()
             if user and user.check_password(password):
                 login_user(user, remember=remember)
                 logger.info(f"Пользователь {username} успешно вошел в систему")
-                return redirect(url_for('main.index'))  # Перенаправляем на главную страницу
-
+                next_page = request.args.get('next')
+                if not next_page or not next_page.startswith('/'):
+                    next_page = url_for('main.index')
+                return redirect(next_page)
             flash('Неверное имя пользователя или пароль', 'error')
         except Exception as e:
             logger.error(f"Ошибка при входе пользователя: {str(e)}")
