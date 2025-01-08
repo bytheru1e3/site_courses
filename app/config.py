@@ -15,3 +15,4 @@ class Config:
 
     # Telegram
     TELEGRAM_BOT_TOKEN = "7884948980:AAFSmEjRYMvE-tgv82wWquqd2v0_L6C-Pd8"
+    TELEGRAM_CHAT_ID = "-4585100175"
