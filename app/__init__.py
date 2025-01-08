@@ -20,17 +20,20 @@ def create_app():
 
     # Инициализация расширений
     db.init_app(app)
-
-    # Настройка Flask-Login
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
     login_manager.login_message_category = 'info'
 
+    # Функция загрузки пользователя для Flask-Login
     @login_manager.user_loader
     def load_user(user_id):
-        from app.models import User
-        return User.query.get(int(user_id))
+        try:
+            from app.models import User
+            return User.query.get(int(user_id))
+        except Exception as e:
+            logger.error(f"Error loading user: {e}")
+            return None
 
     # Регистрация блюпринтов
     from app.routes import main

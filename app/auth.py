@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app.models import User
 from app import db
@@ -68,13 +68,18 @@ def register():
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
+    logger.debug("Entering login route")
+
     if current_user.is_authenticated:
+        logger.debug("User already authenticated, redirecting to index")
         return redirect(url_for('main.index'))
 
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         remember = bool(request.form.get('remember'))
+
+        logger.debug(f"Login attempt for username: {username}")
 
         if not username or not password:
             flash('Пожалуйста, заполните все поля', 'error')
@@ -84,16 +89,24 @@ def login():
             user = User.query.filter_by(username=username).first()
 
             if user and user.check_password(password):
+                logger.debug(f"Password check passed for user: {username}")
+
+                # Логинем пользователя
                 login_user(user, remember=remember)
-                user.update_last_login()
+
+                # Обновляем время последнего входа
+                user.last_login = datetime.utcnow()
+                db.session.commit()
 
                 logger.info(f"Успешный вход пользователя: {username}")
                 flash('Вы успешно вошли в систему!', 'success')
 
-                # Получаем next параметр из URL или переходим на главную
+                # Проверяем, есть ли сохраненный URL для перенаправления
                 next_page = request.args.get('next')
                 if not next_page or not next_page.startswith('/'):
                     next_page = url_for('main.index')
+
+                logger.debug(f"Redirecting authenticated user to: {next_page}")
                 return redirect(next_page)
 
             flash('Неверное имя пользователя или пароль', 'error')
@@ -102,6 +115,7 @@ def login():
         except Exception as e:
             logger.error(f"Ошибка при входе в систему: {str(e)}")
             flash('Произошла ошибка при входе в систему', 'error')
+            db.session.rollback()
 
     return render_template('auth/login.html')
 

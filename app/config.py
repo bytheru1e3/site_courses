@@ -9,6 +9,13 @@ class Config:
     # Flask
     SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 
+    # Session configuration
+    SESSION_TYPE = 'filesystem'
+    PERMANENT_SESSION_LIFETIME = 3600  # 1 hour
+    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+
     # Database
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
@@ -19,10 +26,6 @@ class Config:
         'pool_pre_ping': True,
         'pool_recycle': 300,
     }
-
-    # Basic security settings
-    SESSION_COOKIE_SECURE = False
-    REMEMBER_COOKIE_SECURE = False
 
     # Upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
