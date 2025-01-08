@@ -17,6 +17,8 @@ def create_app():
 
     # Инициализация расширений
     db.init_app(app)
+
+    # Настройка Flask-Login
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
@@ -36,11 +38,13 @@ def create_app():
     app.register_blueprint(auth)
     app.register_blueprint(api)
 
+    # Инициализация базы данных
     with app.app_context():
         try:
             db.create_all()
             logger.info("Database tables created successfully")
-            # Create default admin user if not exists
+
+            # Создание администратора по умолчанию
             from app.models import User
             admin = User.query.filter_by(username='admin').first()
             if not admin:

@@ -60,20 +60,18 @@ def login():
         password = request.form.get('password')
         remember = True if request.form.get('remember') else False
 
-        if not username or not password:
+        if not all([username, password]):
             flash('Пожалуйста, заполните все поля', 'error')
             return render_template('auth/login.html')
 
         try:
             user = User.query.filter_by(username=username).first()
+
             if user and user.check_password(password):
                 login_user(user, remember=remember)
                 logger.info(f"Пользователь {username} успешно вошел в систему")
-
-                next_page = request.args.get('next')
-                if not next_page or url_for('auth.login') in next_page:
-                    next_page = url_for('main.index')
-                return redirect(next_page)
+                flash('Вы успешно вошли в систему', 'success')
+                return redirect(url_for('main.index'))
 
             flash('Неверное имя пользователя или пароль', 'error')
         except Exception as e:
