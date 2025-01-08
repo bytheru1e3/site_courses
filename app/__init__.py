@@ -23,8 +23,9 @@ def create_app():
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
     login_manager.login_message_category = 'info'
-    login_manager.session_protection = 'strong'
+    login_manager.session_protection = None  # Отключаем для отладки
 
+    # После инициализации login_manager регистрируем блюпринты
     from app.routes import main, auth
     app.register_blueprint(main)
     app.register_blueprint(auth)
@@ -39,6 +40,7 @@ def create_app():
             logger.debug(f"[USER_LOADER] User found: {user is not None}")
             if user:
                 logger.debug(f"[USER_LOADER] User authenticated: {user.is_authenticated}")
+                logger.debug(f"[USER_LOADER] User active: {user.is_active}")
             return user
         except Exception as e:
             logger.error(f"[USER_LOADER] Error loading user: {e}")

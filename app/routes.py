@@ -2,7 +2,6 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_required, login_user, logout_user, current_user
 from app.models import User, Course, Material
 from app import db
-from app.services.vector_search import VectorSearch
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,19 +13,9 @@ auth = Blueprint('auth', __name__)
 @login_required
 def index():
     try:
-        logger.debug(f"[INDEX] Entering index route")
-        logger.debug(f"[INDEX] User authenticated: {current_user.is_authenticated}")
         logger.debug(f"[INDEX] User ID: {current_user.get_id()}")
         logger.debug(f"[INDEX] Session data: {session}")
-        logger.debug(f"[INDEX] Is user active: {current_user.is_active}")
-        logger.debug(f"[INDEX] Remember cookie: {request.cookies.get('remember_token')}")
-
-        if not current_user.is_authenticated:
-            logger.warning("[INDEX] User not authenticated, redirecting to login")
-            return redirect(url_for('auth.login'))
-
         courses = Course.query.order_by(Course.created_at.desc()).all()
-        logger.debug(f"[INDEX] Found {len(courses)} courses")
         return render_template('index.html', courses=courses)
     except Exception as e:
         logger.error(f"[INDEX] Error in index route: {e}")
