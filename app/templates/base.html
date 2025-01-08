@@ -8,6 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
 </head>
 <body>
+    {% if not request.endpoint.startswith('auth.') %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
@@ -25,6 +26,7 @@
             </div>
         </div>
     </nav>
+    {% endif %}
 
     <div class="container mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
