@@ -1,8 +1,13 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
 from flask_login import login_required, current_user
-from app.models import Course
+from app.models import Course, Material, MaterialFile
 from app import db
 import logging
+from app.services.file_processor import FileProcessor
+import os
+import shutil
+from app.services.notification_service import NotificationService
+from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +172,7 @@ def delete_material(material_id):
     return redirect(url_for('main.course', course_id=course_id))
 
 @main.route('/upload_file/<int:material_id>', methods=['POST'])
+@login_required
 def upload_file(material_id):
     if 'file' not in request.files:
         flash('Файл не выбран', 'error')
@@ -212,6 +218,7 @@ def upload_file(material_id):
     return redirect(url_for('main.material', material_id=material_id))
 
 @main.route('/delete_file/<int:file_id>', methods=['POST'])
+@login_required
 def delete_material_file(file_id):
     """Удаление файла материала вместе с его векторным представлением"""
     material_file = MaterialFile.query.get_or_404(file_id)
@@ -242,6 +249,7 @@ def delete_material_file(file_id):
     return redirect(url_for('main.material', material_id=material_file.material_id))
 
 @main.route('/reindex_file/<int:file_id>', methods=['POST'])
+@login_required
 def reindex_file(file_id):
     material_file = MaterialFile.query.get_or_404(file_id)
     if process_and_index_file(material_file):
@@ -251,15 +259,44 @@ def reindex_file(file_id):
     return redirect(url_for('main.material', material_id=material_file.material_id))
 
 @main.route('/download_file/<int:file_id>')
+@login_required
 def download_file(file_id):
     material_file = MaterialFile.query.get_or_404(file_id)
     return send_from_directory(UPLOAD_FOLDER, material_file.file_path)
 
-from werkzeug.utils import secure_filename
-from app.models import Material, MaterialFile
-from app.services.file_processor import FileProcessor
-import os
-import shutil
+
+# Notifications routes
+@main.route('/notifications')
+@login_required
+def notifications():
+    """Страница со списком уведомлений пользователя"""
+    notifications = NotificationService.get_user_notifications(
+        current_user, 
+        include_read=True,
+        limit=50
+    )
+    return render_template('notifications.html', notifications=notifications)
+
+@main.route('/notifications/unread')
+@login_required
+def get_unread_notifications():
+    """Получение списка непрочитанных уведомлений"""
+    notifications = NotificationService.get_user_notifications(current_user)
+    return jsonify([notification.to_dict() for notification in notifications])
+
+@main.route('/notifications/<int:notification_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notification_id):
+    """Отметить уведомление как прочитанное"""
+    success = NotificationService.mark_as_read(notification_id, current_user.id)
+    return jsonify({'success': success})
+
+@main.route('/notifications/mark-all-read', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    """Отметить все уведомления как прочитанные"""
+    NotificationService.mark_all_as_read(current_user.id)
+    return jsonify({'success': True})
 
 # Создаем директорию для загруженных файлов
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
@@ -269,3 +306,5 @@ ALLOWED_EXTENSIONS = {'docx', 'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+from flask import send_from_directory

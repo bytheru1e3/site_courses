@@ -3,6 +3,13 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import json
+from enum import Enum
+
+class NotificationType(Enum):
+    INFO = 'info'
+    SUCCESS = 'success'
+    WARNING = 'warning'
+    ERROR = 'error'
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -17,6 +24,7 @@ class User(UserMixin, db.Model):
 
     # Relationships
     courses = db.relationship('Course', backref='author', lazy=True, cascade='all, delete-orphan')
+    notifications = db.relationship('Notification', backref='user', lazy=True, cascade='all, delete-orphan')
 
     def set_password(self, password):
         if not password:
@@ -31,8 +39,41 @@ class User(UserMixin, db.Model):
     def update_last_login(self):
         self.last_login = datetime.utcnow()
 
+    def get_unread_notifications_count(self):
+        return Notification.query.filter_by(user_id=self.id, is_read=False).count()
+
     def __repr__(self):
         return f'<User {self.username}>'
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    type = db.Column(db.String(20), nullable=False, default=NotificationType.INFO.value)
+    title = db.Column(db.String(120), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, default=False)
+    is_deleted = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    read_at = db.Column(db.DateTime)
+
+    def mark_as_read(self):
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = datetime.utcnow()
+            db.session.commit()
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'type': self.type,
+            'title': self.title,
+            'message': self.message,
+            'is_read': self.is_read,
+            'created_at': self.created_at.isoformat(),
+            'read_at': self.read_at.isoformat() if self.read_at else None
+        }
 
 class Course(db.Model):
     __tablename__ = 'courses'
