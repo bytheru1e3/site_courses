@@ -22,6 +22,7 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
+    login_manager.login_message_category = 'info'
     login_manager.session_protection = 'strong'
 
     from app.routes import main, auth
@@ -33,6 +34,7 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         try:
+            logger.debug(f"Loading user with ID: {user_id}")
             return User.query.get(int(user_id))
         except Exception as e:
             logger.error(f"Error loading user: {e}")

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
+from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_required, login_user, logout_user, current_user
 from app.models import User, Course, Material
 from app import db
@@ -15,7 +15,11 @@ vector_search = VectorSearch()
 @login_required
 def index():
     try:
-        logger.debug(f"User accessing index page: {current_user.username}")
+        logger.debug(f"User {current_user.username} accessing index page")
+        if not current_user.is_authenticated:
+            logger.warning("Unauthenticated user trying to access index page")
+            return redirect(url_for('auth.login'))
+
         courses = Course.query.order_by(Course.created_at.desc()).all()
         return render_template('index.html', courses=courses)
     except Exception as e:
@@ -29,52 +33,12 @@ def course(course_id):
     course = Course.query.get_or_404(course_id)
     return render_template('course.html', course=course)
 
-@main.route('/course/add', methods=['GET', 'POST'])
-@login_required
-def add_course():
-    if request.method == 'POST':
-        title = request.form.get('title')
-        description = request.form.get('description')
-        
-        if not title:
-            flash('Title is required', 'error')
-            return redirect(url_for('main.index'))
-            
-        course = Course(title=title, description=description)
-        db.session.add(course)
-        db.session.commit()
-        flash('Course added successfully')
-        return redirect(url_for('main.index'))
-    
-    return render_template('course.html', course=None)
-
 @main.route('/material/<int:material_id>')
 @login_required
 def material(material_id):
     material = Material.query.get_or_404(material_id)
     return render_template('material.html', material=material)
 
-@main.route('/material/add/<int:course_id>', methods=['POST'])
-@login_required
-def add_material():
-    if request.method == 'POST':
-        title = request.form.get('title')
-        content = request.form.get('content')
-        course_id = request.form.get('course_id')
-        
-        if not all([title, content, course_id]):
-            flash('All fields are required', 'error')
-            return redirect(url_for('main.course', course_id=course_id))
-            
-        material = Material(title=title, content=content, course_id=course_id)
-        # Создаем векторное представление для материала
-        vector = vector_search.create_embedding(content)
-        material.set_vector(vector)
-        
-        db.session.add(material)
-        db.session.commit()
-        flash('Material added successfully')
-        return redirect(url_for('main.course', course_id=course_id))
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
@@ -92,14 +56,17 @@ def login():
 
             if user and user.check_password(password):
                 # Успешная авторизация
+                logger.info(f"User {username} credentials verified")
                 login_user(user, remember=True)
                 logger.info(f"User {username} logged in successfully")
 
                 # Получаем next параметр для редиректа
                 next_page = request.args.get('next')
-                if not next_page or not next_page.startswith('/'):
+                # Проверяем безопасность next параметра
+                if not next_page or next_page == '/login':
                     next_page = url_for('main.index')
 
+                logger.debug(f"Redirecting to: {next_page}")
                 return redirect(next_page)
 
             # Неверные учетные данные
