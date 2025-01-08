@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, request, send_from_directory, current_app
 from werkzeug.utils import secure_filename
-from app.models import Course, Material, MaterialFile # Assumed MaterialFile model exists
+from app.models import Course, Material, MaterialFile
 from app import db
 import logging
 import os
@@ -51,6 +51,26 @@ def add_material(course_id):
 
     material = Material(course_id=course_id, title=title, content=content)
     db.session.add(material)
+    db.session.commit()
+
+    return redirect(url_for('main.course', course_id=course_id))
+
+@main.route('/edit_material/<int:material_id>', methods=['POST'])
+def edit_material(material_id):
+    material = Material.query.get_or_404(material_id)
+
+    material.title = request.form.get('title')
+    material.content = request.form.get('content')
+
+    db.session.commit()
+    return redirect(url_for('main.material', material_id=material_id))
+
+@main.route('/delete_material/<int:material_id>', methods=['POST'])
+def delete_material(material_id):
+    material = Material.query.get_or_404(material_id)
+    course_id = material.course_id
+
+    db.session.delete(material)
     db.session.commit()
 
     return redirect(url_for('main.course', course_id=course_id))
