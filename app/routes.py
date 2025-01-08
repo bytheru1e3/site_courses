@@ -14,31 +14,32 @@ logger = logging.getLogger(__name__)
 main = Blueprint('main', __name__)
 
 @main.route('/')
-@login_required
 def index():
     """
     Главная страница с списком курсов.
-    Требует авторизации пользователя.
+    Доступна всем пользователям.
     """
     try:
-        logger.info(f"Доступ к главной странице: пользователь {current_user.username}")
-        courses = []
-        if current_user.is_authenticated:
-            if current_user.is_admin:
-                courses = Course.query.order_by(Course.created_at.desc()).all()
-            else:
-                courses = Course.query.filter_by(user_id=current_user.id).order_by(Course.created_at.desc()).all()
+        logger.info("Доступ к главной странице")
+        courses = Course.query.order_by(Course.created_at.desc()).all()
+        is_admin = current_user.is_authenticated and current_user.is_admin
 
-            return render_template('index.html', 
-                                courses=courses, 
-                                is_admin=current_user.is_admin)
-        else:
-            logger.warning("Неавторизованный доступ к главной странице")
-            return redirect(url_for('auth.login'))
+        return render_template('index.html', 
+                            courses=courses, 
+                            is_admin=is_admin)
     except Exception as e:
         logger.error(f"Ошибка при загрузке главной страницы: {str(e)}")
         flash('Произошла ошибка при загрузке курсов', 'error')
-        return redirect(url_for('auth.login'))
+        return render_template('index.html', courses=[], is_admin=False)
+
+@main.route('/course/<int:course_id>')
+@login_required
+def course(course_id):
+    course = Course.query.get_or_404(course_id)
+    if not current_user.is_admin and course.user_id != current_user.id:
+        flash('У вас нет доступа к этому курсу', 'error')
+        return redirect(url_for('main.index'))
+    return render_template('course.html', course=course)
 
 def process_and_index_file(material_file):
     """Обработка и индексация файла"""
@@ -52,15 +53,6 @@ def process_and_index_file(material_file):
     except Exception as e:
         logger.error(f"Ошибка при индексации файла {material_file.filename}: {str(e)}")
         return False
-
-@main.route('/course/<int:course_id>')
-@login_required
-def course(course_id):
-    course = Course.query.get_or_404(course_id)
-    if not current_user.is_admin and course.user_id != current_user.id:
-        flash('У вас нет доступа к этому курсу', 'error')
-        return redirect(url_for('main.index'))
-    return render_template('course.html', course=course)
 
 @main.route('/add_course', methods=['POST'])
 @login_required
