@@ -1,7 +1,10 @@
 from app import create_app, db
+from app.bot.bot import CourseBot
+from app.config import Config
 import os
 from dotenv import load_dotenv
 import logging
+import threading
 
 # Настройка логирования
 logging.basicConfig(
@@ -13,6 +16,20 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = create_app()
+
+def run_bot():
+    """Запуск Telegram бота в отдельном потоке"""
+    try:
+        bot_token = Config.TELEGRAM_BOT_TOKEN
+        if not bot_token:
+            logger.error("Telegram bot token not found in configuration")
+            return
+
+        bot = CourseBot(bot_token)
+        logger.info("Starting Telegram bot")
+        bot.run()
+    except Exception as e:
+        logger.error(f"Error starting Telegram bot: {e}")
 
 if __name__ == '__main__':
     with app.app_context():
@@ -33,6 +50,12 @@ if __name__ == '__main__':
         except Exception as e:
             logger.error(f"Error creating database tables: {e}")
             raise
+
+    # Запуск бота в отдельном потоке
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True  # Поток завершится вместе с основной программой
+    bot_thread.start()
+    logger.info("Telegram bot thread started")
 
     # Запуск Flask приложения
     app.run(

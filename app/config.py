@@ -14,4 +14,4 @@ class Config:
     REMEMBER_COOKIE_SECURE = False
 
     # Telegram
-    TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+    TELEGRAM_BOT_TOKEN = os.environ.get('7884948980:AAFSmEjRYMvE-tgv82wWquqd2v0_L6C-Pd8')
