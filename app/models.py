@@ -11,6 +11,29 @@ class NotificationType(Enum):
     WARNING = 'warning'
     ERROR = 'error'
 
+class Course(db.Model):
+    __tablename__ = 'courses'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # Relationships
+    materials = db.relationship('Material', backref='course', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<Course {self.title}>'
+
+# Таблица для связи many-to-many между пользователями и курсами
+course_users = db.Table('course_users',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('course_id', db.Integer, db.ForeignKey('courses.id'), primary_key=True),
+    db.Column('granted_at', db.DateTime, default=datetime.utcnow),
+    db.Column('granted_by', db.Integer, db.ForeignKey('users.id'))
+)
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
 
@@ -23,8 +46,18 @@ class User(UserMixin, db.Model):
     last_login = db.Column(db.DateTime)
 
     # Relationships
-    courses = db.relationship('Course', backref='author', lazy=True, cascade='all, delete-orphan')
+    courses_created = db.relationship('Course', backref='author', lazy=True, 
+                                    foreign_keys='Course.user_id',
+                                    cascade='all, delete-orphan')
     notifications = db.relationship('Notification', backref='user', lazy=True, cascade='all, delete-orphan')
+
+    # Доступные курсы (для обычных пользователей)
+    available_courses = db.relationship('Course', 
+                                     secondary=course_users,
+                                     primaryjoin=(id == course_users.c.user_id),
+                                     secondaryjoin=(Course.id == course_users.c.course_id),
+                                     lazy='dynamic',
+                                     backref=db.backref('allowed_users', lazy='dynamic'))
 
     def set_password(self, password):
         if not password:
@@ -41,6 +74,12 @@ class User(UserMixin, db.Model):
 
     def get_unread_notifications_count(self):
         return Notification.query.filter_by(user_id=self.id, is_read=False).count()
+
+    def has_access_to_course(self, course):
+        """Проверяет, имеет ли пользователь доступ к курсу"""
+        if self.is_admin or course.user_id == self.id:
+            return True
+        return self.available_courses.filter_by(id=course.id).first() is not None
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -74,21 +113,6 @@ class Notification(db.Model):
             'created_at': self.created_at.isoformat(),
             'read_at': self.read_at.isoformat() if self.read_at else None
         }
-
-class Course(db.Model):
-    __tablename__ = 'courses'
-
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(120), nullable=False)
-    description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-
-    # Relationships
-    materials = db.relationship('Material', backref='course', lazy=True, cascade='all, delete-orphan')
-
-    def __repr__(self):
-        return f'<Course {self.title}>'
 
 class Material(db.Model):
     __tablename__ = 'materials'

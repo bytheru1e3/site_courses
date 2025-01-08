@@ -41,6 +41,10 @@
                                        class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-eye me-1"></i>Просмотр
                                     </a>
+                                    <a href="{{ url_for('main.manage_course_access', course_id=course.id) }}" 
+                                       class="btn btn-sm btn-outline-info">
+                                        <i class="bi bi-people me-1"></i>Управление доступом
+                                    </a>
                                     <button type="button" 
                                             class="btn btn-sm btn-outline-danger"
                                             data-bs-toggle="modal"

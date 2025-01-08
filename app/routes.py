@@ -32,14 +32,46 @@ def index():
         flash('Произошла ошибка при загрузке курсов', 'error')
         return render_template('index.html', courses=[], is_admin=False)
 
+@main.route('/course/<int:course_id>/manage_access', methods=['GET', 'POST'])
+@login_required
+def manage_course_access(course_id):
+    """Управление доступом пользователей к курсу"""
+    if not current_user.is_admin:
+        flash('У вас нет прав для управления доступом к курсу', 'error')
+        return redirect(url_for('main.index'))
+
+    course = Course.query.get_or_404(course_id)
+    if request.method == 'POST':
+        user_id = request.form.get('user_id')
+        action = request.form.get('action')
+
+        user = User.query.get_or_404(user_id)
+        if action == 'grant':
+            if not user.has_access_to_course(course):
+                user.available_courses.append(course)
+                db.session.commit()
+                flash(f'Доступ предоставлен пользователю {user.username}', 'success')
+        elif action == 'revoke':
+            if user.has_access_to_course(course):
+                user.available_courses.remove(course)
+                db.session.commit()
+                flash(f'Доступ отозван у пользователя {user.username}', 'success')
+
+    # Получаем список всех пользователей (кроме администраторов)
+    users = User.query.filter_by(is_admin=False).all()
+    return render_template('course/manage_access.html', 
+                         course=course, 
+                         users=users)
+
 @main.route('/course/<int:course_id>')
 @login_required
 def course(course_id):
+    """Просмотр курса"""
     course = Course.query.get_or_404(course_id)
-    if not current_user.is_admin and course.user_id != current_user.id:
+    if not current_user.has_access_to_course(course):
         flash('У вас нет доступа к этому курсу', 'error')
         return redirect(url_for('main.index'))
-    return render_template('course.html', course=course)
+    return render_template('course/view.html', course=course)
 
 def process_and_index_file(material_file):
     """Обработка и индексация файла"""
