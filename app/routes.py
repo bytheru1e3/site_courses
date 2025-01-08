@@ -15,6 +15,7 @@ def index():
     try:
         logger.debug(f"[INDEX] User authenticated: {current_user.is_authenticated}")
         logger.debug(f"[INDEX] User ID: {current_user.get_id()}")
+        logger.debug(f"[INDEX] Session data: {session}")
         courses = Course.query.order_by(Course.created_at.desc()).all()
         return render_template('index.html', courses=courses)
     except Exception as e:

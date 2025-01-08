@@ -35,7 +35,10 @@ def create_app():
     def load_user(user_id):
         try:
             logger.debug(f"[USER_LOADER] Loading user with ID: {user_id}")
-            return User.query.get(int(user_id))
+            user = User.query.get(int(user_id))
+            logger.debug(f"[USER_LOADER] User loaded: {user is not None}")
+            logger.debug(f"[USER_LOADER] User authenticated: {user.is_authenticated if user else None}")
+            return user
         except Exception as e:
             logger.error(f"[USER_LOADER] Error loading user: {e}")
             return None
