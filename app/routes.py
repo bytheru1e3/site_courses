@@ -15,11 +15,12 @@ vector_search = VectorSearch()
 @login_required
 def index():
     try:
-        logger.debug(f"User {current_user.username if current_user else 'anonymous'} accessing index page")
+        logger.debug(f"[INDEX] Current user authenticated: {current_user.is_authenticated}")
+        logger.debug(f"[INDEX] Current user: {current_user.username if current_user.is_authenticated else 'None'}")
         courses = Course.query.order_by(Course.created_at.desc()).all()
         return render_template('index.html', courses=courses)
     except Exception as e:
-        logger.error(f"Error in index route: {e}")
+        logger.error(f"[INDEX] Error in index route: {e}")
         flash('Произошла ошибка при загрузке курсов', 'error')
         return redirect(url_for('auth.login'))
 
@@ -38,32 +39,36 @@ def material(material_id):
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
+        logger.debug("[LOGIN] User is already authenticated, redirecting to index")
         return redirect(url_for('main.index'))
 
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        remember = True  # Always use remember me
+        remember = True
 
         try:
             user = User.query.filter_by(username=username).first()
+            logger.debug(f"[LOGIN] Found user: {user is not None}")
 
             if user and user.check_password(password):
                 session.permanent = True
                 login_user(user, remember=remember)
-                logger.info(f"User {username} logged in successfully")
+                logger.info(f"[LOGIN] User {username} logged in successfully")
+                logger.debug(f"[LOGIN] Session: {session}")
 
                 next_page = request.args.get('next')
                 if not next_page or next_page == url_for('auth.login'):
                     next_page = url_for('main.index')
+                logger.debug(f"[LOGIN] Redirecting to: {next_page}")
 
                 return redirect(next_page)
 
             flash('Неверное имя пользователя или пароль', 'error')
-            logger.warning(f"Failed login attempt for username: {username}")
+            logger.warning(f"[LOGIN] Failed login attempt for username: {username}")
 
         except Exception as e:
-            logger.error(f"Error during login process: {e}")
+            logger.error(f"[LOGIN] Error during login process: {e}")
             flash('Произошла ошибка при попытке входа', 'error')
 
     return render_template('login.html')
@@ -75,10 +80,10 @@ def logout():
         username = current_user.username
         logout_user()
         session.clear()
-        logger.info(f"User {username} logged out successfully")
+        logger.info(f"[LOGOUT] User {username} logged out successfully")
         flash('Вы успешно вышли из системы', 'info')
     except Exception as e:
-        logger.error(f"Error during logout: {e}")
+        logger.error(f"[LOGOUT] Error during logout: {e}")
         flash('Произошла ошибка при выходе из системы', 'error')
 
     return redirect(url_for('auth.login'))
