@@ -43,23 +43,33 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        remember = True
+        remember = True if request.form.get('remember') else False
 
         try:
-            user = User.query.filter_by(username=username).first()
-            logger.debug(f"[LOGIN] Found user: {user is not None}")
+            # Сначала находим пользователя по username
+            user_by_username = User.query.filter_by(username=username).first()
+            logger.debug(f"[LOGIN] Found user by username: {user_by_username is not None}")
 
-            if user and user.check_password(password):
-                login_user(user, remember=remember)
-                logger.debug(f"[LOGIN] User {username} logged in successfully")
-                logger.debug(f"[LOGIN] User authenticated: {current_user.is_authenticated}")
+            if user_by_username:
+                # Затем получаем пользователя по id для окончательной проверки
+                user = User.query.filter_by(id=user_by_username.id).first()
+                logger.debug(f"[LOGIN] Found user by id: {user is not None}")
 
-                next_page = request.args.get('next')
-                if not next_page or next_page == url_for('auth.login'):
-                    next_page = url_for('main.index')
+                if user and user.check_password(password):
+                    login_user(user, remember=remember)
+                    session.permanent = True
 
-                logger.debug(f"[LOGIN] Redirecting to: {next_page}")
-                return redirect(next_page)
+                    logger.debug(f"[LOGIN] User {username} logged in successfully")
+                    logger.debug(f"[LOGIN] User authenticated: {current_user.is_authenticated}")
+                    logger.debug(f"[LOGIN] Session: {session}")
+
+                    next_page = request.args.get('next')
+                    if not next_page or next_page == url_for('auth.login'):
+                        next_page = url_for('main.index')
+
+                    logger.debug(f"[LOGIN] Redirecting to: {next_page}")
+                    flash('Вы успешно вошли в систему', 'success')
+                    return redirect(next_page)
 
             flash('Неверное имя пользователя или пароль', 'error')
             logger.warning(f"[LOGIN] Failed login attempt for username: {username}")

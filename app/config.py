@@ -5,7 +5,7 @@ from datetime import timedelta
 class Config:
     # Генерируем стабильный secret key
     SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
-
+    
     # Database
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
