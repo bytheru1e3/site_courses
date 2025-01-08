@@ -72,12 +72,3 @@ class MaterialFile(db.Model):
 
     def get_vector(self):
         return json.loads(self.vector) if self.vector else None
-
-class ChatHistory(db.Model):
-    __tablename__ = 'chat_history'
-
-    id = db.Column(db.Integer, primary_key=True)
-    telegram_user_id = db.Column(db.String(32), nullable=False)
-    message = db.Column(db.Text)
-    response = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)

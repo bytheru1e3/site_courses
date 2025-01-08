@@ -1,11 +1,8 @@
 from app import create_app, db
-from app.bot.bot import CourseBot
 from app.config import Config
 import os
 from dotenv import load_dotenv
 import logging
-import asyncio
-from threading import Thread
 
 # Настройка логирования
 logging.basicConfig(
@@ -38,54 +35,13 @@ def init_database():
         logger.error(f"Error initializing database: {e}")
         raise
 
-def run_flask():
-    """Запуск Flask приложения"""
-    try:
-        app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
-    except Exception as e:
-        logger.error(f"Error running Flask app: {e}")
-        raise
-
-def run_bot_forever():
-    """Запуск бота в отдельном потоке с собственным циклом событий"""
-    try:
-        bot_token = Config.TELEGRAM_BOT_TOKEN
-        if not bot_token:
-            logger.error("Telegram bot token not found")
-            return
-
-        logger.info("Initializing Telegram bot...")
-        bot = CourseBot(bot_token)
-
-        # Создаем новый цикл событий для этого потока
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        # Запускаем бота
-        logger.info("Starting bot polling...")
-        loop.run_until_complete(bot.run_polling())
-    except Exception as e:
-        logger.error(f"Error in bot thread: {e}")
-        raise
-    finally:
-        loop.close()
-
 if __name__ == '__main__':
     try:
         # Инициализация базы данных
         init_database()
 
-        # Запуск Flask в основном потоке
-        flask_thread = Thread(target=run_flask)
-        flask_thread.start()
-
-        # Запуск бота в отдельном потоке
-        bot_thread = Thread(target=run_bot_forever)
-        bot_thread.daemon = True  # Поток бота будет завершен при выходе из программы
-        bot_thread.start()
-
-        # Ожидаем завершения Flask
-        flask_thread.join()
+        # Запуск Flask приложения
+        app.run(host='0.0.0.0', port=5000, debug=True)
 
     except KeyboardInterrupt:
         logger.info("Application stopped by user")

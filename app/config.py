@@ -16,6 +16,3 @@ class Config:
     # Basic security settings for development
     SESSION_COOKIE_SECURE = False
     REMEMBER_COOKIE_SECURE = False
-
-    # Telegram
-    TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', "7884948980:AAFSmEjRYMvE-tgv82wWquqd2v0_L6C-Pd8")
