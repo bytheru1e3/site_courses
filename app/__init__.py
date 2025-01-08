@@ -33,7 +33,12 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        try:
+            logger.debug(f"[USER_LOADER] Loading user with ID: {user_id}")
+            return User.query.get(int(user_id))
+        except Exception as e:
+            logger.error(f"[USER_LOADER] Error loading user: {e}")
+            return None
 
     with app.app_context():
         try:
