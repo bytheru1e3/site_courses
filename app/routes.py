@@ -37,11 +37,16 @@ def process_and_index_file(material_file):
 @main.route('/')
 @login_required
 def index():
-    if current_user.is_admin:
-        courses = Course.query.order_by(Course.created_at.desc()).all()
-    else:
-        courses = Course.query.filter_by(user_id=current_user.id).order_by(Course.created_at.desc()).all()
-    return render_template('index.html', courses=courses, is_admin=current_user.is_admin)
+    try:
+        if current_user.is_admin:
+            courses = Course.query.order_by(Course.created_at.desc()).all()
+        else:
+            courses = Course.query.filter_by(user_id=current_user.id).order_by(Course.created_at.desc()).all()
+        return render_template('index.html', courses=courses, is_admin=current_user.is_admin)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке главной страницы: {str(e)}")
+        flash('Произошла ошибка при загрузке курсов', 'error')
+        return redirect(url_for('auth.login'))
 
 @main.route('/course/<int:course_id>')
 @login_required
@@ -118,11 +123,16 @@ def delete_course(course_id):
     return redirect(url_for('main.index'))
 
 @main.route('/material/<int:material_id>')
+@login_required
 def material(material_id):
     material = Material.query.get_or_404(material_id)
+    if not current_user.is_admin and material.course.user_id != current_user.id:
+        flash('У вас нет доступа к этому материалу', 'error')
+        return redirect(url_for('main.index'))
     return render_template('material.html', material=material)
 
 @main.route('/add_material/<int:course_id>', methods=['POST'])
+@login_required
 def add_material(course_id):
     title = request.form.get('title')
     content = request.form.get('content')
@@ -134,6 +144,7 @@ def add_material(course_id):
     return redirect(url_for('main.course', course_id=course_id))
 
 @main.route('/edit_material/<int:material_id>', methods=['POST'])
+@login_required
 def edit_material(material_id):
     material = Material.query.get_or_404(material_id)
     material.title = request.form.get('title')
@@ -142,6 +153,7 @@ def edit_material(material_id):
     return redirect(url_for('main.material', material_id=material_id))
 
 @main.route('/delete_material/<int:material_id>', methods=['POST'])
+@login_required
 def delete_material(material_id):
     material = Material.query.get_or_404(material_id)
     course_id = material.course_id

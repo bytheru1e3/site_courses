@@ -67,9 +67,12 @@ def login():
             if user and user.check_password(password):
                 login_user(user, remember=remember)
                 logger.info(f"Пользователь {username} успешно вошел в систему")
+
+                # Получаем next параметр из URL или используем главную страницу
                 next_page = request.args.get('next')
                 if not next_page or not next_page.startswith('/'):
                     next_page = url_for('main.index')
+
                 return redirect(next_page)
 
             flash('Неверное имя пользователя или пароль', 'error')
