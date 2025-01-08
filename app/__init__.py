@@ -23,7 +23,6 @@ def create_app():
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
     login_manager.login_message_category = 'info'
-    login_manager.session_protection = None  # Отключаем для отладки
 
     # После инициализации login_manager регистрируем блюпринты
     from app.routes import main, auth
@@ -34,17 +33,7 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        try:
-            logger.debug(f"[USER_LOADER] Loading user with ID: {user_id}")
-            user = User.query.get(int(user_id))
-            logger.debug(f"[USER_LOADER] User found: {user is not None}")
-            if user:
-                logger.debug(f"[USER_LOADER] User authenticated: {user.is_authenticated}")
-                logger.debug(f"[USER_LOADER] User active: {user.is_active}")
-            return user
-        except Exception as e:
-            logger.error(f"[USER_LOADER] Error loading user: {e}")
-            return None
+        return User.query.get(int(user_id))
 
     with app.app_context():
         try:
