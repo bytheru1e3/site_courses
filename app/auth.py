@@ -3,9 +3,10 @@ from flask_login import login_user, logout_user, login_required, current_user
 from app.models import User
 from app import db
 import logging
+from datetime import datetime
+from email_validator import validate_email, EmailNotValidError
 
 logger = logging.getLogger(__name__)
-
 auth = Blueprint('auth', __name__)
 
 @auth.route('/register', methods=['GET', 'POST'])
@@ -14,25 +15,38 @@ def register():
         return redirect(url_for('main.index'))
 
     if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        password_confirm = request.form.get('password_confirm')
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        password_confirm = request.form.get('password_confirm', '')
 
-        if not all([username, email, password, password_confirm]):
-            flash('Пожалуйста, заполните все поля', 'error')
-            return render_template('auth/register.html')
+        # Валидация данных
+        errors = []
+        if not username or len(username) < 3:
+            errors.append('Имя пользователя должно содержать минимум 3 символа')
 
-        if User.query.filter_by(username=username).first():
-            flash('Пользователь с таким именем уже существует', 'error')
-            return render_template('auth/register.html')
-
-        if User.query.filter_by(email=email).first():
-            flash('Пользователь с таким email уже существует', 'error')
-            return render_template('auth/register.html')
+        if not password or len(password) < 6:
+            errors.append('Пароль должен содержать минимум 6 символов')
 
         if password != password_confirm:
-            flash('Пароли не совпадают', 'error')
+            errors.append('Пароли не совпадают')
+
+        try:
+            valid = validate_email(email)
+            email = valid.email
+        except EmailNotValidError:
+            errors.append('Указан некорректный email адрес')
+
+        # Проверка существующих пользователей
+        if User.query.filter_by(username=username).first():
+            errors.append('Пользователь с таким именем уже существует')
+
+        if User.query.filter_by(email=email).first():
+            errors.append('Пользователь с таким email уже существует')
+
+        if errors:
+            for error in errors:
+                flash(error, 'error')
             return render_template('auth/register.html')
 
         try:
@@ -40,13 +54,15 @@ def register():
             new_user.set_password(password)
             db.session.add(new_user)
             db.session.commit()
-            logger.info(f"Пользователь {username} успешно зарегистрирован")
-            flash('Регистрация успешна! Теперь вы можете войти', 'success')
+
+            logger.info(f"Зарегистрирован новый пользователь: {username}")
+            flash('Регистрация успешна! Теперь вы можете войти в систему', 'success')
             return redirect(url_for('auth.login'))
+
         except Exception as e:
             logger.error(f"Ошибка при регистрации пользователя: {str(e)}")
             db.session.rollback()
-            flash('Произошла ошибка при регистрации', 'error')
+            flash('Произошла ошибка при регистрации. Пожалуйста, попробуйте позже.', 'error')
 
     return render_template('auth/register.html')
 
@@ -56,11 +72,11 @@ def login():
         return redirect(url_for('main.index'))
 
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        remember = True if request.form.get('remember') else False
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        remember = bool(request.form.get('remember'))
 
-        if not all([username, password]):
+        if not username or not password:
             flash('Пожалуйста, заполните все поля', 'error')
             return render_template('auth/login.html')
 
@@ -69,13 +85,22 @@ def login():
 
             if user and user.check_password(password):
                 login_user(user, remember=remember)
-                logger.info(f"Пользователь {username} успешно вошел в систему")
-                flash('Вы успешно вошли в систему', 'success')
-                return redirect(url_for('main.index'))
+                user.update_last_login()
+
+                logger.info(f"Успешный вход пользователя: {username}")
+                flash('Вы успешно вошли в систему!', 'success')
+
+                # Получаем next параметр из URL или переходим на главную
+                next_page = request.args.get('next')
+                if not next_page or not next_page.startswith('/'):
+                    next_page = url_for('main.index')
+                return redirect(next_page)
 
             flash('Неверное имя пользователя или пароль', 'error')
+            logger.warning(f"Неудачная попытка входа для пользователя: {username}")
+
         except Exception as e:
-            logger.error(f"Ошибка при входе пользователя: {str(e)}")
+            logger.error(f"Ошибка при входе в систему: {str(e)}")
             flash('Произошла ошибка при входе в систему', 'error')
 
     return render_template('auth/login.html')
