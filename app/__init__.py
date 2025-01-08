@@ -15,10 +15,14 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Инициализация расширений
     db.init_app(app)
+
+    # Настройка Flask-Login
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
+    login_manager.session_protection = 'strong'
 
     from app.routes import main, auth
     app.register_blueprint(main)
@@ -28,7 +32,11 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        try:
+            return User.query.get(int(user_id))
+        except Exception as e:
+            logger.error(f"Error loading user: {e}")
+            return None
 
     with app.app_context():
         try:
