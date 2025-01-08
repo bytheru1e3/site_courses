@@ -7,11 +7,13 @@
             <i class="bi bi-book me-2"></i>Курсы
         </h2>
     </div>
+    {% if is_admin %}
     <div class="col text-end">
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCourseModal">
             <i class="bi bi-plus-circle me-2"></i>Добавить курс
         </button>
     </div>
+    {% endif %}
 </div>
 
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
@@ -28,15 +30,28 @@
                 </p>
             </div>
             <div class="card-footer">
-                <a href="{{ url_for('main.course', course_id=course.id) }}" class="btn btn-primary">
-                    <i class="bi bi-eye me-2"></i>Просмотр
-                </a>
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('main.course', course_id=course.id) }}" class="btn btn-primary">
+                        <i class="bi bi-eye me-2"></i>Просмотр
+                    </a>
+                    {% if is_admin %}
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editCourseModal{{ course.id }}">
+                            <i class="bi bi-pencil me-2"></i>Редактировать
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteCourseModal{{ course.id }}">
+                            <i class="bi bi-trash me-2"></i>Удалить
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
 
+{% if is_admin %}
 <!-- Modal for adding course -->
 <div class="modal fade" id="addCourseModal" tabindex="-1">
     <div class="modal-dialog">
@@ -64,4 +79,63 @@
         </div>
     </div>
 </div>
+
+<!-- Edit and Delete modals for each course -->
+{% for course in courses %}
+<!-- Edit Course Modal -->
+<div class="modal fade" id="editCourseModal{{ course.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать курс</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('main.edit_course', course_id=course.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="title{{ course.id }}" class="form-label">Название</label>
+                        <input type="text" class="form-control" id="title{{ course.id }}" name="title" value="{{ course.title }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description{{ course.id }}" class="form-label">Описание</label>
+                        <textarea class="form-control" id="description{{ course.id }}" name="description" rows="3">{{ course.description }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Course Modal -->
+<div class="modal fade" id="deleteCourseModal{{ course.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы действительно хотите удалить курс "{{ course.title }}"?</p>
+                <p class="text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Это действие нельзя отменить. Все материалы курса также будут удалены.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form method="POST" action="{{ url_for('main.delete_course', course_id=course.id) }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-2"></i>Удалить
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
 {% endblock %}

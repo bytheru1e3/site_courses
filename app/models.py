@@ -14,6 +14,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256))
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    courses = db.relationship('Course', backref='owner', lazy=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -28,6 +29,7 @@ class Course(db.Model):
     title = db.Column(db.String(120), unique=True, nullable=False)
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     materials = db.relationship('Material', backref='course', lazy=True, cascade="all, delete-orphan")
 
     def to_dict(self):

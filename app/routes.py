@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, redirect, url_for, request, send_from_directory, current_app, flash
+from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import Course, Material, MaterialFile
 from app.services.file_processor import FileProcessor
@@ -34,30 +35,92 @@ def process_and_index_file(material_file):
         return False
 
 @main.route('/')
+@login_required
 def index():
-    courses = Course.query.order_by(Course.created_at.desc()).all()
-    return render_template('index.html', courses=courses)
+    if current_user.is_admin:
+        courses = Course.query.order_by(Course.created_at.desc()).all()
+    else:
+        courses = Course.query.filter_by(user_id=current_user.id).order_by(Course.created_at.desc()).all()
+    return render_template('index.html', courses=courses, is_admin=current_user.is_admin)
 
 @main.route('/course/<int:course_id>')
+@login_required
 def course(course_id):
     course = Course.query.get_or_404(course_id)
+    if not current_user.is_admin and course.user_id != current_user.id:
+        flash('У вас нет доступа к этому курсу', 'error')
+        return redirect(url_for('main.index'))
     return render_template('course.html', course=course)
+
+@main.route('/add_course', methods=['POST'])
+@login_required
+def add_course():
+    if not current_user.is_admin:
+        flash('У вас нет прав для создания курсов', 'error')
+        return redirect(url_for('main.index'))
+
+    title = request.form.get('title')
+    description = request.form.get('description')
+
+    try:
+        course = Course(
+            title=title, 
+            description=description,
+            user_id=current_user.id
+        )
+        db.session.add(course)
+        db.session.commit()
+        flash('Курс успешно создан', 'success')
+    except Exception as e:
+        logger.error(f"Ошибка при создании курса: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при создании курса', 'error')
+
+    return redirect(url_for('main.index'))
+
+@main.route('/edit_course/<int:course_id>', methods=['POST'])
+@login_required
+def edit_course(course_id):
+    if not current_user.is_admin:
+        flash('У вас нет прав для редактирования курсов', 'error')
+        return redirect(url_for('main.index'))
+
+    course = Course.query.get_or_404(course_id)
+    try:
+        course.title = request.form.get('title')
+        course.description = request.form.get('description')
+        db.session.commit()
+        flash('Курс успешно обновлен', 'success')
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении курса: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при обновлении курса', 'error')
+
+    return redirect(url_for('main.index'))
+
+@main.route('/delete_course/<int:course_id>', methods=['POST'])
+@login_required
+def delete_course(course_id):
+    if not current_user.is_admin:
+        flash('У вас нет прав для удаления курсов', 'error')
+        return redirect(url_for('main.index'))
+
+    course = Course.query.get_or_404(course_id)
+    try:
+        db.session.delete(course)
+        db.session.commit()
+        flash('Курс успешно удален', 'success')
+    except Exception as e:
+        logger.error(f"Ошибка при удалении курса: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при удалении курса', 'error')
+
+    return redirect(url_for('main.index'))
 
 @main.route('/material/<int:material_id>')
 def material(material_id):
     material = Material.query.get_or_404(material_id)
     return render_template('material.html', material=material)
-
-@main.route('/add_course', methods=['POST'])
-def add_course():
-    title = request.form.get('title')
-    description = request.form.get('description')
-
-    course = Course(title=title, description=description)
-    db.session.add(course)
-    db.session.commit()
-
-    return redirect(url_for('main.index'))
 
 @main.route('/add_material/<int:course_id>', methods=['POST'])
 def add_material(course_id):
