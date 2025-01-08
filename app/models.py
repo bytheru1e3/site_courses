@@ -3,6 +3,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import json
+import os
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -45,12 +46,23 @@ class Material(db.Model):
     content = db.Column(db.Text)
     vector = db.Column(db.Text)  # Хранение векторных эмбеддингов
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    files = db.relationship('MaterialFile', backref='material', lazy=True, cascade="all, delete-orphan")
 
     def set_vector(self, vector_data):
         self.vector = json.dumps(vector_data)
 
     def get_vector(self):
         return json.loads(self.vector) if self.vector else None
+
+class MaterialFile(db.Model):
+    __tablename__ = 'material_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+    material_id = db.Column(db.Integer, db.ForeignKey('materials.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(512), nullable=False)
+    file_type = db.Column(db.String(10), nullable=False)  # 'pdf' или 'docx'
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class ChatHistory(db.Model):
     __tablename__ = 'chat_history'
