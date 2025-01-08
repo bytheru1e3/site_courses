@@ -29,22 +29,19 @@ class VectorDB:
         try:
             if not text or not isinstance(text, str):
                 logger.error("Получен невалидный текст для создания эмбеддинга")
-                return np.zeros(384).tolist()  # Возвращаем нулевой вектор в случае ошибки
+                return np.zeros(384).tolist()
 
             if not self.is_vectorizer_fitted:
-                # Если векторайзер еще не обучен, обучаем его на текущем тексте
                 vectors = self.vectorizer.fit_transform([text])
                 self.is_vectorizer_fitted = True
             else:
-                # Если векторайзер уже обучен, просто трансформируем текст
                 vectors = self.vectorizer.transform([text])
 
-            # Преобразуем разреженную матрицу в плотный вектор
             embedding = vectors.toarray()[0]
             return embedding.tolist()
         except Exception as e:
             logger.error(f"Ошибка при создании эмбеддинга: {e}")
-            return np.zeros(384).tolist()  # Возвращаем нулевой вектор в случае ошибки
+            return np.zeros(384).tolist()
 
     def add_document(self, text, document_id):
         """Добавление документа в индекс"""
@@ -64,6 +61,40 @@ class VectorDB:
             return False
         except Exception as e:
             logger.error(f"Ошибка при добавлении документа: {e}")
+            return False
+
+    def remove_document(self, document_id):
+        """Удаление документа из индекса"""
+        try:
+            # Находим индекс документа в списке
+            doc_idx = None
+            for idx, doc in enumerate(self.documents):
+                if doc['id'] == document_id:
+                    doc_idx = idx
+                    break
+
+            if doc_idx is not None:
+                # Удаляем документ из списка
+                self.documents.pop(doc_idx)
+
+                # Создаем новый индекс
+                new_index = faiss.IndexFlatL2(384)
+
+                # Переиндексируем оставшиеся документы
+                for doc in self.documents:
+                    embedding = self.create_embedding(doc['text'])
+                    embedding_array = np.array([embedding]).astype('float32')
+                    new_index.add(embedding_array)
+
+                # Заменяем старый индекс новым
+                self.index = new_index
+                self.save()
+
+                logger.info(f"Документ {document_id} успешно удален из базы")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка при удалении документа: {e}")
             return False
 
     def search(self, query, top_k=3):
@@ -99,7 +130,7 @@ class VectorDB:
                 logger.info(f"Загрузка индекса из файла: {self.index_file}")
                 return faiss.read_index(self.index_file)
             logger.info("Создание нового индекса")
-            return faiss.IndexFlatL2(384)  # Используем размерность TfidfVectorizer
+            return faiss.IndexFlatL2(384)
         except Exception as e:
             logger.error(f"Ошибка при загрузке индекса: {e}")
             return faiss.IndexFlatL2(384)

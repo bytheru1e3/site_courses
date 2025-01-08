@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, redirect, url_for, request, send_from_directory, current_app
+from flask import Blueprint, render_template, redirect, url_for, request, send_from_directory, current_app, flash
 from werkzeug.utils import secure_filename
 from app.models import Course, Material, MaterialFile
-from app.services.file_processor import FileProcessor # Added import
+from app.services.file_processor import FileProcessor
 from app import db
 import logging
 import os
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,11 @@ def edit_material(material_id):
 def delete_material(material_id):
     material = Material.query.get_or_404(material_id)
     course_id = material.course_id
+
+    # Удаляем все файлы материала
+    for material_file in material.files:
+        delete_material_file(material_file.id)
+
     db.session.delete(material)
     db.session.commit()
     return redirect(url_for('main.course', course_id=course_id))
@@ -88,42 +94,85 @@ def delete_material(material_id):
 @main.route('/upload_file/<int:material_id>', methods=['POST'])
 def upload_file(material_id):
     if 'file' not in request.files:
+        flash('Файл не выбран', 'error')
         return redirect(url_for('main.material', material_id=material_id))
 
     file = request.files['file']
     if file.filename == '':
+        flash('Файл не выбран', 'error')
         return redirect(url_for('main.material', material_id=material_id))
 
     if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        file_type = filename.rsplit('.', 1)[1].lower()
+        try:
+            filename = secure_filename(file.filename)
+            file_type = filename.rsplit('.', 1)[1].lower()
 
-        # Создаем поддиректорию для материала
-        material_folder = os.path.join(UPLOAD_FOLDER, str(material_id))
-        os.makedirs(material_folder, exist_ok=True)
+            # Создаем поддиректорию для материала
+            material_folder = os.path.join(UPLOAD_FOLDER, str(material_id))
+            os.makedirs(material_folder, exist_ok=True)
 
-        file_path = os.path.join(material_folder, filename)
-        file.save(file_path)
+            file_path = os.path.join(material_folder, filename)
+            file.save(file_path)
 
-        # Сохраняем информацию о файле в базе данных
-        material_file = MaterialFile(
-            material_id=material_id,
-            filename=filename,
-            file_path=os.path.join(str(material_id), filename),
-            file_type=file_type
-        )
-        db.session.add(material_file)
-        db.session.commit()
+            # Сохраняем информацию о файле в базе данных
+            material_file = MaterialFile(
+                material_id=material_id,
+                filename=filename,
+                file_path=os.path.join(str(material_id), filename),
+                file_type=file_type
+            )
+            db.session.add(material_file)
+            db.session.commit()
 
-        # Индексируем файл
-        process_and_index_file(material_file) # Added function call
+            # Индексируем файл
+            if process_and_index_file(material_file):
+                flash('Файл успешно загружен и проиндексирован', 'success')
+            else:
+                flash('Файл загружен, но возникла ошибка при индексации', 'warning')
+
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке файла: {str(e)}")
+            flash('Произошла ошибка при загрузке файла', 'error')
 
     return redirect(url_for('main.material', material_id=material_id))
 
-@main.route('/reindex_file/<int:file_id>', methods=['POST']) # Added route
+@main.route('/delete_file/<int:file_id>', methods=['POST'])
+def delete_material_file(file_id):
+    """Удаление файла материала вместе с его векторным представлением"""
+    material_file = MaterialFile.query.get_or_404(file_id)
+    try:
+        # Удаляем физический файл
+        file_path = os.path.join(UPLOAD_FOLDER, material_file.file_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+            # Если это был последний файл в папке материала, удаляем папку
+            material_folder = os.path.dirname(file_path)
+            if not os.listdir(material_folder):
+                shutil.rmtree(material_folder)
+
+        # Удаляем векторное представление
+        vector_db = FileProcessor.get_vector_db()
+        vector_db.remove_document(file_path)
+
+        # Удаляем запись из базы данных
+        db.session.delete(material_file)
+        db.session.commit()
+
+        flash('Файл успешно удален', 'success')
+    except Exception as e:
+        logger.error(f"Ошибка при удалении файла: {str(e)}")
+        flash('Произошла ошибка при удалении файла', 'error')
+
+    return redirect(url_for('main.material', material_id=material_file.material_id))
+
+@main.route('/reindex_file/<int:file_id>', methods=['POST'])
 def reindex_file(file_id):
     material_file = MaterialFile.query.get_or_404(file_id)
-    process_and_index_file(material_file)
+    if process_and_index_file(material_file):
+        flash('Файл успешно переиндексирован', 'success')
+    else:
+        flash('Произошла ошибка при переиндексации файла', 'error')
     return redirect(url_for('main.material', material_id=material_file.material_id))
 
 @main.route('/download_file/<int:file_id>')
