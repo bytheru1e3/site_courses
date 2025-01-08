@@ -1,8 +1,10 @@
 from app import create_app, db
-from app.config import Config
+from app.bot.bot import CourseBot
 import os
 from dotenv import load_dotenv
 import logging
+import asyncio
+import threading
 
 # Настройка логирования
 logging.basicConfig(
@@ -39,10 +41,33 @@ def init_database():
         logger.error(f"Error initializing database: {e}")
         raise
 
+def run_bot():
+    """Запуск бота в отдельном потоке"""
+    try:
+        bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+        if not bot_token:
+            logger.error("TELEGRAM_BOT_TOKEN not found in environment variables")
+            return
+
+        # В development используем localhost, в production нужно будет изменить
+        api_url = f"http://localhost:{os.environ.get('PORT', 5000)}"
+
+        bot = CourseBot(bot_token, api_url)
+        asyncio.run(bot.start_polling())
+    except Exception as e:
+        logger.error(f"Bot error: {e}")
+
 if __name__ == '__main__':
     try:
         # Инициализация базы данных
-        init_database()
+        with app.app_context():
+            db.create_all()
+            logger.info("Database tables created successfully")
+
+        # Запуск бота в отдельном потоке
+        bot_thread = threading.Thread(target=run_bot)
+        bot_thread.daemon = True
+        bot_thread.start()
 
         # Запуск Flask приложения
         app.run(host='0.0.0.0', port=5000, debug=True)
