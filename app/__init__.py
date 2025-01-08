@@ -52,7 +52,7 @@ def create_app():
             db.create_all()
             logger.info("Database tables created successfully")
 
-            # Создание администратора по умолчанию
+            # Создание администратора по умолчанию, если его нет
             from app.models import User
             admin = User.query.filter_by(username='admin').first()
             if not admin:
@@ -61,10 +61,15 @@ def create_app():
                     email='admin@example.com',
                     is_admin=True
                 )
-                admin.set_password('admin')
+                admin.set_password('admin')  # Устанавливаем пароль 'admin'
                 db.session.add(admin)
                 db.session.commit()
-                logger.info("Default admin user created")
+                logger.info("Default admin user created with password 'admin'")
+            else:
+                # Сброс пароля администратора на значение по умолчанию
+                admin.set_password('admin')
+                db.session.commit()
+                logger.info("Admin password reset to 'admin'")
 
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")

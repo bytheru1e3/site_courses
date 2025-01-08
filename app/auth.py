@@ -90,27 +90,32 @@ def login():
 
         try:
             user = User.query.filter_by(username=username).first()
+            logger.debug(f"Found user: {user is not None}")
 
-            if user and user.check_password(password):
-                logger.debug(f"Password check passed for user: {username}")
+            if user:
+                password_check = user.check_password(password)
+                logger.debug(f"Password check result: {password_check}")
 
-                # Логинем пользователя
-                login_user(user, remember=remember)
+                if password_check:
+                    logger.debug(f"Password check passed for user: {username}")
 
-                # Обновляем время последнего входа
-                user.last_login = datetime.utcnow()
-                db.session.commit()
+                    # Логинем пользователя
+                    login_user(user, remember=remember)
 
-                logger.info(f"Успешный вход пользователя: {username}")
-                flash('Вы успешно вошли в систему!', 'success')
+                    # Обновляем время последнего входа
+                    user.last_login = datetime.utcnow()
+                    db.session.commit()
 
-                # Проверяем, есть ли сохраненный URL для перенаправления
-                next_page = request.args.get('next')
-                if not next_page or not next_page.startswith('/'):
-                    next_page = url_for('main.index')
+                    logger.info(f"Успешный вход пользователя: {username}")
+                    flash('Вы успешно вошли в систему!', 'success')
 
-                logger.debug(f"Redirecting authenticated user to: {next_page}")
-                return redirect(next_page)
+                    # Проверяем, есть ли сохраненный URL для перенаправления
+                    next_page = request.args.get('next')
+                    if not next_page or not next_page.startswith('/'):
+                        next_page = url_for('main.index')
+
+                    logger.debug(f"Redirecting authenticated user to: {next_page}")
+                    return redirect(next_page)
 
             flash('Неверное имя пользователя или пароль', 'error')
             logger.warning(f"Неудачная попытка входа для пользователя: {username}")
