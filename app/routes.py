@@ -15,15 +15,18 @@ vector_search = VectorSearch()
 @login_required
 def index():
     try:
+        logger.debug(f"[INDEX] Entering index route")
         logger.debug(f"[INDEX] User authenticated: {current_user.is_authenticated}")
         logger.debug(f"[INDEX] User ID: {current_user.get_id()}")
         logger.debug(f"[INDEX] Session data: {session}")
+        logger.debug(f"[INDEX] Is user active: {current_user.is_active}")
 
         if not current_user.is_authenticated:
             logger.warning("[INDEX] User not authenticated, redirecting to login")
             return redirect(url_for('auth.login'))
 
         courses = Course.query.order_by(Course.created_at.desc()).all()
+        logger.debug(f"[INDEX] Found {len(courses)} courses")
         return render_template('index.html', courses=courses)
     except Exception as e:
         logger.error(f"[INDEX] Error in index route: {e}")
@@ -61,6 +64,7 @@ def login():
                 login_user(user, remember=remember)
                 logger.info(f"[LOGIN] User {username} logged in successfully")
                 logger.debug(f"[LOGIN] User authenticated: {current_user.is_authenticated}")
+                logger.debug(f"[LOGIN] User active: {current_user.is_active}")
                 logger.debug(f"[LOGIN] Session data: {session}")
 
                 next_page = request.args.get('next')
