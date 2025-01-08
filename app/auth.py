@@ -10,7 +10,6 @@ auth = Blueprint('auth', __name__)
 
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
-    # Если пользователь уже вошел в систему, отправляем его на главную страницу
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
 
@@ -20,12 +19,10 @@ def register():
         password = request.form.get('password')
         password_confirm = request.form.get('password_confirm')
 
-        # Проверяем, что все поля заполнены
         if not all([username, email, password, password_confirm]):
             flash('Пожалуйста, заполните все поля', 'error')
             return render_template('auth/register.html')
 
-        # Проверяем существование пользователя
         if User.query.filter_by(username=username).first():
             flash('Пользователь с таким именем уже существует', 'error')
             return render_template('auth/register.html')
@@ -34,12 +31,10 @@ def register():
             flash('Пользователь с таким email уже существует', 'error')
             return render_template('auth/register.html')
 
-        # Проверяем совпадение паролей
         if password != password_confirm:
             flash('Пароли не совпадают', 'error')
             return render_template('auth/register.html')
 
-        # Регистрируем нового пользователя
         try:
             new_user = User(username=username, email=email)
             new_user.set_password(password)
@@ -47,14 +42,13 @@ def register():
             db.session.commit()
             logger.info(f"Пользователь {username} успешно зарегистрирован")
             flash('Регистрация успешна! Теперь вы можете войти', 'success')
-            return redirect(url_for('auth.login'))  # Перенаправляем на страницу входа
+            return redirect(url_for('auth.login'))
         except Exception as e:
             logger.error(f"Ошибка при регистрации пользователя: {str(e)}")
             db.session.rollback()
             flash('Произошла ошибка при регистрации', 'error')
 
     return render_template('auth/register.html')
-
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
@@ -75,17 +69,18 @@ def login():
             if user and user.check_password(password):
                 login_user(user, remember=remember)
                 logger.info(f"Пользователь {username} успешно вошел в систему")
+
                 next_page = request.args.get('next')
-                if not next_page or not next_page.startswith('/'):
+                if not next_page or url_for('auth.login') in next_page:
                     next_page = url_for('main.index')
                 return redirect(next_page)
+
             flash('Неверное имя пользователя или пароль', 'error')
         except Exception as e:
             logger.error(f"Ошибка при входе пользователя: {str(e)}")
             flash('Произошла ошибка при входе в систему', 'error')
 
     return render_template('auth/login.html')
-
 
 @auth.route('/logout')
 @login_required

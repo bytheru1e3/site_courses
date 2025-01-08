@@ -40,6 +40,19 @@ def create_app():
         try:
             db.create_all()
             logger.info("Database tables created successfully")
+            # Create default admin user if not exists
+            from app.models import User
+            admin = User.query.filter_by(username='admin').first()
+            if not admin:
+                admin = User(
+                    username='admin',
+                    email='admin@example.com',
+                    is_admin=True
+                )
+                admin.set_password('admin')
+                db.session.add(admin)
+                db.session.commit()
+                logger.info("Default admin user created")
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")
             raise
