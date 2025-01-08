@@ -67,9 +67,12 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-person-plus me-2"></i>Зарегистрироваться
                         </button>
-                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
-                            <i class="bi bi-box-arrow-in-right me-2"></i>Уже есть аккаунт? Войти
-                        </a>
+                        <div class="text-center">
+                            <small class="text-muted">
+                                Уже есть аккаунт? 
+                                <a href="{{ url_for('auth.login') }}">Войти</a>
+                            </small>
+                        </div>
                     </div>
                 </form>
             </div>

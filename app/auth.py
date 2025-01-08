@@ -19,13 +19,17 @@ def register():
         password = request.form.get('password')
         password_confirm = request.form.get('password_confirm')
 
-        user = User.query.filter_by(username=username).first()
-        if user:
+        # Проверка наличия всех полей
+        if not all([username, email, password, password_confirm]):
+            flash('Пожалуйста, заполните все поля', 'error')
+            return render_template('auth/register.html')
+
+        # Проверка существования пользователя
+        if User.query.filter_by(username=username).first():
             flash('Пользователь с таким именем уже существует', 'error')
             return render_template('auth/register.html')
 
-        user = User.query.filter_by(email=email).first()
-        if user:
+        if User.query.filter_by(email=email).first():
             flash('Пользователь с таким email уже существует', 'error')
             return render_template('auth/register.html')
 
@@ -67,7 +71,7 @@ def login():
                 if not next_page or not next_page.startswith('/'):
                     next_page = url_for('main.index')
                 return redirect(next_page)
-            
+
             flash('Неверное имя пользователя или пароль', 'error')
         except Exception as e:
             logger.error(f"Ошибка при входе пользователя: {str(e)}")
@@ -86,5 +90,5 @@ def logout():
     except Exception as e:
         logger.error(f"Ошибка при выходе из системы: {str(e)}")
         flash('Произошла ошибка при выходе из системы', 'error')
-    
+
     return redirect(url_for('auth.login'))
