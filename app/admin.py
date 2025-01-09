@@ -16,7 +16,7 @@ def index():
             'materials_count': Material.query.count(),
             'files_count': MaterialFile.query.count()
         }
-        return render_template('admin/index.html', stats=stats)
+        return render_template('admin/index.html', stats=stats, is_admin=True)
     except Exception as e:
         logger.error(f"Ошибка при загрузке статистики: {str(e)}")
         flash('Ошибка при загрузке статистики', 'error')
@@ -27,7 +27,7 @@ def users():
     """Список всех пользователей"""
     try:
         users = User.query.order_by(User.created_at.desc()).all()
-        return render_template('admin/users.html', users=users)
+        return render_template('admin/users.html', users=users, is_admin=True)
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка пользователей: {str(e)}")
         flash('Ошибка при загрузке списка пользователей', 'error')
@@ -38,7 +38,7 @@ def courses():
     """Список всех курсов"""
     try:
         courses = Course.query.order_by(Course.created_at.desc()).all()
-        return render_template('admin/courses.html', courses=courses)
+        return render_template('admin/courses.html', courses=courses, is_admin=True)
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка курсов: {str(e)}")
         flash('Ошибка при загрузке списка курсов', 'error')
@@ -49,7 +49,7 @@ def files():
     """Список всех файлов"""
     try:
         files = MaterialFile.query.order_by(MaterialFile.uploaded_at.desc()).all()
-        return render_template('admin/files.html', files=files)
+        return render_template('admin/files.html', files=files, is_admin=True)
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка файлов: {str(e)}")
         flash('Ошибка при загрузке списка файлов', 'error')

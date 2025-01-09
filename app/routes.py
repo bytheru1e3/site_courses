@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_from_directory
 from app.models import Course, Material, MaterialFile, User
 from app import db
 import logging
@@ -15,9 +15,15 @@ main = Blueprint('main', __name__)
 @main.route('/')
 def index():
     """
-    Перенаправление на админ панель
+    Главная страница с админ-панелью
     """
-    return redirect(url_for('admin.index'))
+    stats = {
+        'users_count': User.query.count(),
+        'courses_count': Course.query.count(),
+        'materials_count': Material.query.count(),
+        'files_count': MaterialFile.query.count()
+    }
+    return render_template('admin/index.html', stats=stats, is_admin=True)
 
 @main.route('/course/<int:course_id>/manage_access', methods=['GET', 'POST'])
 def manage_course_access(course_id):
@@ -69,8 +75,7 @@ def add_course():
     try:
         course = Course(
             title=title, 
-            description=description,
-            user_id=current_user.id
+            description=description
         )
         db.session.add(course)
         db.session.commit()
@@ -232,7 +237,7 @@ def download_file(file_id):
 @main.route('/notifications')
 def notifications():
     notifications = NotificationService.get_user_notifications(
-        current_user, 
+        None, 
         include_read=True,
         limit=50
     )
@@ -240,17 +245,17 @@ def notifications():
 
 @main.route('/notifications/unread')
 def get_unread_notifications():
-    notifications = NotificationService.get_user_notifications(current_user)
+    notifications = NotificationService.get_user_notifications(None)
     return jsonify([notification.to_dict() for notification in notifications])
 
 @main.route('/notifications/<int:notification_id>/read', methods=['POST'])
 def mark_notification_read(notification_id):
-    success = NotificationService.mark_as_read(notification_id, current_user.id)
+    success = NotificationService.mark_as_read(notification_id, None)
     return jsonify({'success': success})
 
 @main.route('/notifications/mark-all-read', methods=['POST'])
 def mark_all_notifications_read():
-    NotificationService.mark_all_as_read(current_user.id)
+    NotificationService.mark_all_as_read(None)
     return jsonify({'success': True})
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
