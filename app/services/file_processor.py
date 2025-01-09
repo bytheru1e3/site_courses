@@ -1,8 +1,8 @@
 import os
+import logging
 from PyPDF2 import PdfReader
 from docx import Document
 import mammoth
-import logging
 from app.services.vector_db_service import VectorDBService
 
 logger = logging.getLogger(__name__)
