@@ -4,27 +4,39 @@ from app import db
 import logging
 from app.services.file_processor import FileProcessor
 import os
-import shutil
 from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
+from app.config import Config
 
 logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
+
+# Используем UPLOAD_FOLDER из конфигурации
+UPLOAD_FOLDER = Config.UPLOAD_FOLDER
+ALLOWED_EXTENSIONS = Config.ALLOWED_EXTENSIONS
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @main.route('/')
 def index():
     """
     Главная страница с админ-панелью
     """
-    stats = {
-        'users_count': User.query.count(),
-        'courses_count': Course.query.count(),
-        'materials_count': Material.query.count(),
-        'files_count': MaterialFile.query.count()
-    }
-    return render_template('admin/index.html', stats=stats, is_admin=True)
+    try:
+        stats = {
+            'users_count': User.query.count(),
+            'courses_count': Course.query.count(),
+            'materials_count': Material.query.count(),
+            'files_count': MaterialFile.query.count()
+        }
+        return render_template('admin/index.html', stats=stats, is_admin=True)
+    except Exception as e:
+        logger.error(f"Error in index route: {str(e)}")
+        flash('Произошла ошибка при загрузке страницы', 'error')
+        return render_template('admin/index.html', stats={}, is_admin=True)
 
 @main.route('/course/<int:course_id>/manage_access', methods=['GET', 'POST'])
 def manage_course_access(course_id):
@@ -308,14 +320,6 @@ def mark_notification_read(notification_id):
 def mark_all_notifications_read():
     """Отметка всех уведомлений как прочитанных"""
     return jsonify({'success': True})
-
-UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-ALLOWED_EXTENSIONS = {'docx', 'pdf'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 from flask import send_from_directory
 

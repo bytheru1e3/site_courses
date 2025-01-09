@@ -10,7 +10,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
-    logger.info("Initializing Flask application...")
+    logger.info("Starting application initialization...")
+
+    # Проверяем наличие переменной окружения DATABASE_URL
+    if not os.environ.get('DATABASE_URL'):
+        logger.error("DATABASE_URL environment variable is not set")
+        raise ValueError("DATABASE_URL environment variable is not set")
+
+    logger.info("Creating Flask application instance...")
     app = create_app()
 
     if __name__ == '__main__':
