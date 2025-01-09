@@ -2,11 +2,24 @@ from flask import Blueprint, render_template, flash, redirect, url_for
 from app.models import User, Course, Material, MaterialFile
 from app import db
 import logging
+from flask_login import login_required, current_user
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 admin = Blueprint('admin', __name__, url_prefix='/admin')
 
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash('У вас нет прав доступа к этой странице', 'error')
+            return redirect(url_for('main.index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 @admin.route('/')
+@login_required
+@admin_required
 def index():
     """Главная страница административной панели"""
     try:
@@ -23,6 +36,8 @@ def index():
         return redirect(url_for('main.index'))
 
 @admin.route('/users')
+@login_required
+@admin_required
 def users():
     """Список всех пользователей"""
     try:
@@ -34,6 +49,8 @@ def users():
         return redirect(url_for('admin.index'))
 
 @admin.route('/courses')
+@login_required
+@admin_required
 def courses():
     """Список всех курсов"""
     try:
@@ -45,6 +62,8 @@ def courses():
         return redirect(url_for('admin.index'))
 
 @admin.route('/files')
+@login_required
+@admin_required
 def files():
     """Список всех файлов"""
     try:
