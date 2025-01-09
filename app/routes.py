@@ -17,55 +17,58 @@ def index():
     """
     Главная страница с админ-панелью
     """
-    stats = {
-        'users_count': User.query.count(),
-        'courses_count': Course.query.count(),
-        'materials_count': Material.query.count(),
-        'files_count': MaterialFile.query.count()
-    }
-    return render_template('admin/index.html', stats=stats, is_admin=True)
-
-@main.route('/course/<int:course_id>/manage_access', methods=['GET', 'POST'])
-def manage_course_access(course_id):
-    """Управление доступом пользователей к курсу"""
-    try:
-        course = Course.query.get_or_404(course_id)
-
-        if request.method == 'POST':
-            user_id = request.form.get('user_id')
-            action = request.form.get('action')
-
-            if not user_id or not action:
-                flash('Неверные параметры запроса', 'error')
-                return redirect(url_for('main.manage_course_access', course_id=course_id))
-
-            user = User.query.get_or_404(user_id)
-
-            if action == 'grant':
-                if not user.has_access_to_course(course):
-                    user.available_courses.append(course)
-                    db.session.commit()
-                    flash(f'Доступ предоставлен пользователю {user.username}', 'success')
-            elif action == 'revoke':
-                if user.has_access_to_course(course):
-                    user.available_courses.remove(course)
-                    db.session.commit()
-                    flash(f'Доступ отозван у пользователя {user.username}', 'success')
-
-        # Получаем список всех пользователей для управления доступом
-        users = User.query.filter_by(is_admin=False).all()
-        return render_template('course/manage_access.html', course=course, users=users)
-
-    except Exception as e:
-        logger.error(f"Ошибка при управлении доступом к курсу: {str(e)}")
-        flash('Произошла ошибка при управлении доступом', 'error')
-        return redirect(url_for('main.index'))
+    courses = Course.query.all()
+    return render_template('index.html', courses=courses, is_admin=True)
 
 @main.route('/course/<int:course_id>')
 def course(course_id):
     """Просмотр курса"""
     course = Course.query.get_or_404(course_id)
     return render_template('course/view.html', course=course)
+
+@main.route('/chat')
+def chat():
+    """Страница чата с ИИ"""
+    try:
+        # Получаем все доступные курсы
+        available_courses = Course.query.all()
+        return render_template('chat/index.html', courses=available_courses)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
+        flash('Произошла ошибка при загрузке чата', 'error')
+        return redirect(url_for('main.index'))
+
+@main.route('/chat/ask', methods=['POST'])
+def ask_question():
+    """Обработка вопроса к ИИ"""
+    try:
+        course_id = request.form.get('course_id')
+        question = request.form.get('question')
+
+        if not course_id or not question:
+            return jsonify({
+                'success': False,
+                'error': 'Необходимо выбрать курс и задать вопрос'
+            }), 400
+
+        # Проверяем существование курса
+        course = Course.query.get_or_404(course_id)
+
+        # Здесь будет логика обработки вопроса через ИИ
+        # Пока возвращаем заглушку
+        response = {
+            'success': True,
+            'answer': f'Это тестовый ответ на ваш вопрос по курсу "{course.title}": {question}'
+        }
+
+        return jsonify(response)
+
+    except Exception as e:
+        logger.error(f"Ошибка при обработке вопроса: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Произошла ошибка при обработке вопроса'
+        }), 500
 
 def process_and_index_file(material_file):
     """Обработка и индексация файла"""
@@ -102,9 +105,8 @@ def add_course():
             return redirect(url_for('main.index'))
 
         # Получаем текущего пользователя через flask-login
-        if True: #Always true now.  No authentication check.
-            user_id = 1 # Placeholder user ID.  Needs proper handling for system user.
-        
+        user_id = 1 # Placeholder user ID.  Needs proper handling for system user.
+
         course = Course(
             title=title,
             description=description,
@@ -226,15 +228,14 @@ def upload_file(material_id):
                 flash('Файл успешно загружен и проиндексирован', 'success')
 
                 # Добавляем уведомление об успешной загрузке
-                if True: #Always true now. No authentication check.
-                    notification = Notification(
-                        user_id=1, # Placeholder user ID. Needs proper handling.
-                        title='Файл обработан',
-                        message=f'Файл {filename} успешно загружен и проиндексирован',
-                        type='success'
-                    )
-                    db.session.add(notification)
-                    db.session.commit()
+                notification = Notification(
+                    user_id=1, # Placeholder user ID. Needs proper handling.
+                    title='Файл обработан',
+                    message=f'Файл {filename} успешно загружен и проиндексирован',
+                    type='success'
+                )
+                db.session.add(notification)
+                db.session.commit()
             else:
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
 
@@ -288,14 +289,10 @@ def download_file(file_id):
 def notifications():
     """Просмотр всех уведомлений"""
     try:
-        # Получаем все активные уведомления для текущего пользователя
-        if True: #Always true now. No authentication check.
-            notifications = Notification.query.filter_by(
-                user_id=1, # Placeholder user ID. Needs proper handling.
-                is_deleted=False
-            ).order_by(Notification.created_at.desc()).all()
-        else:
-            notifications = []
+        notifications = Notification.query.filter_by(
+            user_id=1, # Placeholder user ID. Needs proper handling.
+            is_deleted=False
+        ).order_by(Notification.created_at.desc()).all()
 
         return render_template('notifications.html', notifications=notifications)
     except Exception as e:
@@ -360,46 +357,38 @@ def add_user():
 
     return redirect(url_for('admin.users'))
 
-@main.route('/chat')
-def chat():
-    """Страница чата с ИИ"""
+@main.route('/manage_course_access/<int:course_id>', methods=['GET', 'POST'])
+def manage_course_access(course_id):
+    """Управление доступом пользователей к курсу"""
     try:
-        # Получаем все доступные курсы
-        available_courses = Course.query.all()
-        return render_template('chat/index.html', courses=available_courses)
-    except Exception as e:
-        logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
-        flash('Произошла ошибка при загрузке чата', 'error')
-        return redirect(url_for('main.index'))
-
-@main.route('/chat/ask', methods=['POST'])
-def ask_question():
-    """Обработка вопроса к ИИ"""
-    try:
-        course_id = request.form.get('course_id')
-        question = request.form.get('question')
-
-        if not course_id or not question:
-            return jsonify({
-                'success': False,
-                'error': 'Необходимо выбрать курс и задать вопрос'
-            }), 400
-
-        # Проверяем существование курса
         course = Course.query.get_or_404(course_id)
 
-        # Здесь будет логика обработки вопроса через ИИ
-        # Пока возвращаем заглушку
-        response = {
-            'success': True,
-            'answer': 'Функционал ответов на вопросы находится в разработке.'
-        }
+        if request.method == 'POST':
+            user_id = request.form.get('user_id')
+            action = request.form.get('action')
 
-        return jsonify(response)
+            if not user_id or not action:
+                flash('Неверные параметры запроса', 'error')
+                return redirect(url_for('main.manage_course_access', course_id=course_id))
+
+            user = User.query.get_or_404(user_id)
+
+            if action == 'grant':
+                if not user.has_access_to_course(course):
+                    user.available_courses.append(course)
+                    db.session.commit()
+                    flash(f'Доступ предоставлен пользователю {user.username}', 'success')
+            elif action == 'revoke':
+                if user.has_access_to_course(course):
+                    user.available_courses.remove(course)
+                    db.session.commit()
+                    flash(f'Доступ отозван у пользователя {user.username}', 'success')
+
+        # Получаем список всех пользователей для управления доступом
+        users = User.query.filter_by(is_admin=False).all()
+        return render_template('course/manage_access.html', course=course, users=users)
 
     except Exception as e:
-        logger.error(f"Ошибка при обработке вопроса: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Произошла ошибка при обработке вопроса'
-        }), 500
+        logger.error(f"Ошибка при управлении доступом к курсу: {str(e)}")
+        flash('Произошла ошибка при управлении доступом', 'error')
+        return redirect(url_for('main.index'))

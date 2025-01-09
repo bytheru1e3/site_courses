@@ -24,12 +24,10 @@ def create_app():
     from app.routes import main
     from app.admin import admin
     from app.api import api
-    #from app.auth import auth #Removed auth blueprint registration
 
     app.register_blueprint(main)
     app.register_blueprint(admin)
     app.register_blueprint(api)
-    #app.register_blueprint(auth) #Removed auth blueprint registration
 
 
     # Создание таблиц базы данных
