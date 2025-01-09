@@ -2,7 +2,6 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
 import logging
-from flask_login import current_user, login_required
 from app.services.file_processor import FileProcessor
 import os
 from werkzeug.utils import secure_filename
@@ -23,12 +22,11 @@ def index():
     """
     try:
         courses = Course.query.all()
-        is_admin = current_user.is_authenticated and current_user.is_admin if current_user else False
-        return render_template('index.html', courses=courses, is_admin=is_admin)
+        return render_template('index.html', courses=courses, is_admin=True)
     except Exception as e:
         logger.error(f"Error in index route: {str(e)}")
         flash('Произошла ошибка при загрузке страницы', 'error')
-        return render_template('index.html', courses=[], is_admin=False)
+        return render_template('index.html', courses=[], is_admin=True)
 
 @main.route('/course/<int:course_id>/manage_access', methods=['GET', 'POST'])
 def manage_course_access(course_id):
@@ -96,27 +94,22 @@ def add_course():
             flash('Название курса обязательно', 'error')
             return redirect(url_for('main.index'))
 
-        # Получаем текущего пользователя через flask-login
-        if current_user and current_user.is_authenticated:
-            user_id = current_user.id
-        else:
-            # Если пользователь не аутентифицирован, используем системного пользователя
-            system_user = User.query.filter_by(username='system').first()
-            if not system_user:
-                system_user = User(
-                    username='system',
-                    email='system@example.com',
-                    is_admin=True
-                )
-                system_user.set_password('system')
-                db.session.add(system_user)
-                db.session.commit()
-            user_id = system_user.id
+        # Получаем или создаем системного пользователя
+        system_user = User.query.filter_by(username='system').first()
+        if not system_user:
+            system_user = User(
+                username='system',
+                email='system@example.com',
+                is_admin=True
+            )
+            system_user.set_password('system')
+            db.session.add(system_user)
+            db.session.commit()
 
         course = Course(
             title=title,
             description=description,
-            user_id=user_id
+            user_id=system_user.id
         )
 
         db.session.add(course)
