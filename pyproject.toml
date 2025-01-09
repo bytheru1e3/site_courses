@@ -20,4 +20,5 @@ dependencies = [
     "scikit-learn>=1.6.0",
     "twilio>=9.4.1",
     "aiogram==3.3.0",
+    "slack-sdk>=3.34.0",
 ]
