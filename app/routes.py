@@ -4,29 +4,27 @@ from app import db
 import logging
 from app.services.file_processor import FileProcessor
 import os
-from werkzeug.utils import secure_filename
-from app.config import Config
 import shutil
+from app.services.notification_service import NotificationService
+from werkzeug.utils import secure_filename
+from flask_login import current_user, login_required
 
 logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
 
-def allowed_file(filename):
-    return Config.allowed_file(filename)
-
 @main.route('/')
 def index():
     """
-    Главная страница
+    Главная страница с админ-панелью
     """
-    try:
-        courses = Course.query.all()
-        return render_template('index.html', courses=courses, is_admin=True)
-    except Exception as e:
-        logger.error(f"Error in index route: {str(e)}")
-        flash('Произошла ошибка при загрузке страницы', 'error')
-        return render_template('index.html', courses=[], is_admin=True)
+    stats = {
+        'users_count': User.query.count(),
+        'courses_count': Course.query.count(),
+        'materials_count': Material.query.count(),
+        'files_count': MaterialFile.query.count()
+    }
+    return render_template('admin/index.html', stats=stats, is_admin=True)
 
 @main.route('/course/<int:course_id>/manage_access', methods=['GET', 'POST'])
 def manage_course_access(course_id):
@@ -73,7 +71,7 @@ def course(course_id):
 def process_and_index_file(material_file):
     """Обработка и индексация файла"""
     try:
-        file_path = os.path.join(Config.UPLOAD_FOLDER, material_file.file_path)
+        file_path = os.path.join(UPLOAD_FOLDER, material_file.file_path)
         vector = FileProcessor.process_file(file_path)
         material_file.set_vector(vector)
         db.session.commit()
@@ -94,22 +92,27 @@ def add_course():
             flash('Название курса обязательно', 'error')
             return redirect(url_for('main.index'))
 
-        # Получаем или создаем системного пользователя
-        system_user = User.query.filter_by(username='system').first()
-        if not system_user:
-            system_user = User(
-                username='system',
-                email='system@example.com',
-                is_admin=True
-            )
-            system_user.set_password('system')
-            db.session.add(system_user)
-            db.session.commit()
+        # Получаем текущего пользователя через flask-login
+        if current_user and current_user.is_authenticated:
+            user_id = current_user.id
+        else:
+            # Если пользователь не аутентифицирован, используем системного пользователя
+            system_user = User.query.filter_by(username='system').first()
+            if not system_user:
+                system_user = User(
+                    username='system',
+                    email='system@example.com',
+                    is_admin=True
+                )
+                system_user.set_password('system')
+                db.session.add(system_user)
+                db.session.commit()
+            user_id = system_user.id
 
         course = Course(
             title=title,
             description=description,
-            user_id=system_user.id
+            user_id=user_id
         )
 
         db.session.add(course)
@@ -206,7 +209,7 @@ def upload_file(material_id):
             filename = secure_filename(file.filename)
             file_type = filename.rsplit('.', 1)[1].lower()
 
-            material_folder = os.path.join(Config.UPLOAD_FOLDER, str(material_id))
+            material_folder = os.path.join(UPLOAD_FOLDER, str(material_id))
             os.makedirs(material_folder, exist_ok=True)
 
             file_path = os.path.join(material_folder, filename)
@@ -236,7 +239,7 @@ def upload_file(material_id):
 def delete_material_file(file_id):
     material_file = MaterialFile.query.get_or_404(file_id)
     try:
-        file_path = os.path.join(Config.UPLOAD_FOLDER, material_file.file_path)
+        file_path = os.path.join(UPLOAD_FOLDER, material_file.file_path)
         if os.path.exists(file_path):
             os.remove(file_path)
 
@@ -269,13 +272,14 @@ def reindex_file(file_id):
 @main.route('/download_file/<int:file_id>')
 def download_file(file_id):
     material_file = MaterialFile.query.get_or_404(file_id)
-    return send_from_directory(Config.UPLOAD_FOLDER, material_file.file_path)
+    return send_from_directory(UPLOAD_FOLDER, material_file.file_path)
 
 
 @main.route('/notifications')
 def notifications():
     """Просмотр всех уведомлений"""
     try:
+        # Получаем все активные уведомления для текущего пользователя
         if current_user and current_user.is_authenticated:
             notifications = Notification.query.filter_by(
                 user_id=current_user.id,
@@ -304,6 +308,16 @@ def mark_notification_read(notification_id):
 def mark_all_notifications_read():
     """Отметка всех уведомлений как прочитанных"""
     return jsonify({'success': True})
+
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {'docx', 'pdf'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+from flask import send_from_directory
 
 @main.route('/admin/users/add', methods=['POST'])
 def add_user():

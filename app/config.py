@@ -1,11 +1,6 @@
 import os
 import secrets
 from dotenv import load_dotenv
-import logging
-
-# Настройка логирования
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -13,6 +8,13 @@ load_dotenv()
 class Config:
     # Flask
     SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+
+    # Session configuration
+    SESSION_TYPE = 'filesystem'
+    PERMANENT_SESSION_LIFETIME = 3600  # 1 hour
+    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
 
     # Database
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
@@ -26,19 +28,5 @@ class Config:
     }
 
     # Upload settings
-    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
-    ALLOWED_EXTENSIONS = {'docx', 'pdf'}
-
-    def __init__(self):
-        if not self.SQLALCHEMY_DATABASE_URI:
-            raise ValueError("DATABASE_URL environment variable is not set")
-        logger.info(f"Database URL configured: {self.SQLALCHEMY_DATABASE_URI.split('@')[1] if self.SQLALCHEMY_DATABASE_URI else 'Not set'}")
-
-    @staticmethod
-    def allowed_file(filename):
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
-
-# Create required directories
-os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
-logger.info(f"Upload folder created at: {Config.UPLOAD_FOLDER}")
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
