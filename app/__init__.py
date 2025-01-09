@@ -19,6 +19,10 @@ def create_app():
     from app.config import Config
     app.config.from_object(Config)
 
+    # Создание необходимых директорий
+    os.makedirs('app/data', exist_ok=True)  # Для векторной базы данных
+    os.makedirs('app/uploads', exist_ok=True)  # Для загруженных файлов
+
     # Инициализация расширений
     db.init_app(app)
     login_manager.init_app(app)

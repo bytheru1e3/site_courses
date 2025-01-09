@@ -22,4 +22,7 @@ dependencies = [
     "aiogram==3.3.0",
     "slack-sdk>=3.34.0",
     "sqlalchemy>=2.0.36",
+    "sentence-transformers>=3.3.1",
+    "trafilatura>=2.0.0",
+    "mammoth>=1.9.0",
 ]

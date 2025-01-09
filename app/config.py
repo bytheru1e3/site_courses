@@ -30,3 +30,12 @@ class Config:
     # Upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
+
+    # Vector Database settings
+    VECTOR_DB_INDEX_FILE = os.path.join(os.getcwd(), 'app', 'data', 'vector_index.faiss')
+    VECTOR_DB_DOCUMENTS_FILE = os.path.join(os.getcwd(), 'app', 'data', 'documents.json')
+    EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_DIM = 384
+
+    # File Processing
+    ALLOWED_EXTENSIONS = {'docx', 'pdf'}
