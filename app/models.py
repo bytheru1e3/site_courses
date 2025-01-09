@@ -26,7 +26,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
-    telegram_id = db.Column(db.String(32), unique=True, nullable=True, index=True)  # Added telegram_id field
+    telegram_id = db.Column(db.String(32), unique=True, nullable=True, index=True)
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
@@ -58,12 +58,9 @@ class User(UserMixin, db.Model):
 
     def update_last_login(self):
         self.last_login = datetime.utcnow()
-
-    def get_unread_notifications_count(self):
-        return Notification.query.filter_by(user_id=self.id, is_read=False).count()
+        db.session.commit()
 
     def has_access_to_course(self, course):
-        """Проверяет, имеет ли пользователь доступ к курсу"""
         if self.is_admin or course.user_id == self.id:
             return True
         return self.available_courses.filter_by(id=course.id).first() is not None
