@@ -1,37 +1,46 @@
+import os
+import logging
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
-import logging
-import os
+from sqlalchemy.orm import DeclarativeBase
 
 # Настройка логирования
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
+# Определение базового класса для моделей
+class Base(DeclarativeBase):
+    pass
+
 # Инициализация расширений
-db = SQLAlchemy()
+db = SQLAlchemy(model_class=Base)
 login_manager = LoginManager()
 
 def create_app():
+    logger.info("Starting application initialization...")
     app = Flask(__name__)
+    logger.info("Flask application instance created")
 
     # Загрузка конфигурации
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev')
-
-    # Настройка базы данных
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-    if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
-        app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    from app.config import Config
+    app.config.from_object(Config)
+    logger.info("Configuration loaded")
 
     # Инициализация расширений
     db.init_app(app)
     login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+    logger.info("Extensions initialized")
 
     # Создание необходимых директорий
-    os.makedirs(os.path.join(app.root_path, 'uploads'), exist_ok=True)
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'templates'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'static'), exist_ok=True)
+    logger.info("Required directories created")
 
     # Регистрация обработчика для login_manager
     @login_manager.user_loader
@@ -39,13 +48,28 @@ def create_app():
         from app.models import User
         return User.query.get(int(user_id))
 
-    # Создание таблиц базы данных
     with app.app_context():
+        # Импорт моделей
         from app.models import User, Course, Material, MaterialFile, Notification
-        db.create_all()
+        logger.info("Models imported")
 
-    # Регистрация блюпринтов
-    from app.routes import main
-    app.register_blueprint(main)
+        # Создание таблиц
+        try:
+            logger.info("Creating database tables...")
+            db.create_all()
+            logger.info("Database tables created successfully")
+        except Exception as e:
+            logger.error(f"Error creating database tables: {e}")
+            raise
 
+        # Регистрация блюпринтов
+        try:
+            from app.routes import main
+            app.register_blueprint(main)
+            logger.info("Blueprints registered")
+        except Exception as e:
+            logger.error(f"Error registering blueprints: {e}")
+            raise
+
+    logger.info("Application initialization completed")
     return app

@@ -1,9 +1,9 @@
-from app import db
+from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
-import json
+from app import db
 from enum import Enum
+import json
 
 class NotificationType(Enum):
     INFO = 'info'

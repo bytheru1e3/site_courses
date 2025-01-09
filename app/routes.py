@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
 
+def allowed_file(filename):
+    return Config.allowed_file(filename)
+
 @main.route('/')
 def index():
     """
