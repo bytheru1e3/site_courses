@@ -2,6 +2,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 import logging
 import os
+from flask_login import LoginManager
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG)
@@ -9,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Инициализация расширений
 db = SQLAlchemy()
+login_manager = LoginManager()
 
 def create_app():
     app = Flask(__name__)
@@ -19,6 +21,7 @@ def create_app():
 
     # Инициализация расширений
     db.init_app(app)
+    login_manager.init_app(app)
 
     # Регистрация блюпринтов
     from app.routes import main
@@ -29,9 +32,11 @@ def create_app():
     app.register_blueprint(admin)
     app.register_blueprint(api)
 
-    # Регистрация CLI команд
-    from app.cli import create_admin
-    app.cli.add_command(create_admin)
+    # Регистрация обработчика для login_manager
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import User
+        return User.query.get(int(user_id))
 
     # Создание таблиц базы данных
     with app.app_context():
