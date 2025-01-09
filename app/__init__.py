@@ -26,12 +26,22 @@ def create_app():
         os.makedirs(os.path.join(app.root_path, 'data'), exist_ok=True)
         os.makedirs(os.path.join(app.root_path, 'uploads'), exist_ok=True)
         os.makedirs(os.path.join(app.root_path, 'templates'), exist_ok=True)
+        os.makedirs(os.path.join(app.root_path, 'static'), exist_ok=True)
         logger.info("Required directories created")
 
         # Инициализация расширений
         db.init_app(app)
         login_manager.init_app(app)
         logger.info("Extensions initialized")
+
+        # Проверка подключения к базе данных
+        with app.app_context():
+            try:
+                db.engine.connect()
+                logger.info("Database connection successful")
+            except Exception as e:
+                logger.error(f"Database connection failed: {str(e)}")
+                raise
 
         # Инициализация FileProcessor
         try:
@@ -51,6 +61,7 @@ def create_app():
         with app.app_context():
             try:
                 logger.info("Creating database tables...")
+                from app.models import User, Course, Material, MaterialFile, Notification
                 db.create_all()
                 logger.info("Database tables created successfully")
             except Exception as e:
