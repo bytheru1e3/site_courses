@@ -277,3 +277,35 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 from flask import send_from_directory
+
+@main.route('/admin/users/add', methods=['POST'])
+def add_user():
+    """Добавление нового пользователя"""
+    try:
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        is_admin = bool(request.form.get('is_admin'))
+
+        # Проверка существования пользователя
+        if User.query.filter_by(username=username).first():
+            flash('Пользователь с таким именем уже существует', 'error')
+            return redirect(url_for('admin.users'))
+
+        if User.query.filter_by(email=email).first():
+            flash('Пользователь с таким email уже существует', 'error')
+            return redirect(url_for('admin.users'))
+
+        # Создание пользователя
+        user = User(username=username, email=email, is_admin=is_admin)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        flash('Пользователь успешно создан', 'success')
+    except Exception as e:
+        logger.error(f"Ошибка при создании пользователя: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при создании пользователя', 'error')
+
+    return redirect(url_for('admin.users'))
