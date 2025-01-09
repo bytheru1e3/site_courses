@@ -1,8 +1,157 @@
-from flask import Blueprint, jsonify
-from flask_login import current_user, login_required
+from flask import Blueprint, jsonify, request
+from flask_login import current_user, login_required, login_user
 from app.models import Course, User, Notification
+from app import db
+import logging
+import secrets
 
+logger = logging.getLogger(__name__)
 api = Blueprint('api', __name__)
+
+@api.route('/api/telegram/register', methods=['POST'])
+def telegram_register():
+    """Register user through Telegram"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+
+        telegram_id = data.get('telegram_id')
+        username = data.get('username')
+        email = data.get('email')
+
+        if not all([telegram_id, username, email]):
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields'
+            }), 400
+
+        # Check if user already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return jsonify({
+                'success': False,
+                'error': 'User with this email already exists'
+            }), 409
+
+        # Create new user
+        user = User(
+            username=username,
+            email=email,
+            telegram_id=telegram_id
+        )
+        # Generate random password for user
+        password = secrets.token_urlsafe(12)
+        user.set_password(password)
+
+        db.session.add(user)
+        db.session.commit()
+
+        logger.info(f"New user registered via Telegram: {username}")
+
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error in telegram registration: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@api.route('/api/telegram/auth', methods=['POST'])
+def telegram_auth():
+    """Authenticate user through Telegram"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+
+        telegram_id = data.get('telegram_id')
+        if not telegram_id:
+            return jsonify({
+                'success': False,
+                'error': 'Telegram ID is required'
+            }), 400
+
+        user = User.query.filter_by(telegram_id=telegram_id).first()
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        login_user(user)
+        user.update_last_login()
+        db.session.commit()
+
+        logger.info(f"User {user.username} authenticated via Telegram")
+
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_admin': user.is_admin
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error in telegram authentication: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@api.route('/api/telegram/check_user', methods=['POST'])
+def check_telegram_user():
+    """Check if user exists by Telegram ID"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+
+        telegram_id = data.get('telegram_id')
+        if not telegram_id:
+            return jsonify({
+                'success': False,
+                'error': 'Telegram ID is required'
+            }), 400
+
+        user = User.query.filter_by(telegram_id=telegram_id).first()
+
+        return jsonify({
+            'success': True,
+            'exists': bool(user),
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email
+            } if user else None
+        })
+
+    except Exception as e:
+        logger.error(f"Error checking telegram user: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @api.route('/api/user/profile', methods=['GET'])
 @login_required
