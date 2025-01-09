@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 import logging
 import os
+from app.services.file_processor import FileProcessor
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG)
@@ -31,6 +32,14 @@ def create_app():
         db.init_app(app)
         login_manager.init_app(app)
         logger.info("Extensions initialized")
+
+        # Инициализация FileProcessor
+        try:
+            FileProcessor.get_vector_db()
+            logger.info("Vector database service initialized")
+        except Exception as e:
+            logger.error(f"Error initializing vector database: {str(e)}")
+            # Continue even if vector db fails, as it's not critical for basic functionality
 
         # Регистрация обработчика для login_manager
         @login_manager.user_loader
