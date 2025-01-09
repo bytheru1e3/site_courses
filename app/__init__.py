@@ -22,15 +22,20 @@ def create_app():
     # Инициализация расширений
     db.init_app(app)
     login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
+    login_manager.login_message_category = 'warning'
 
     # Регистрация блюпринтов
     from app.routes import main
     from app.admin import admin
     from app.api import api
+    from app.auth import auth
 
     app.register_blueprint(main)
     app.register_blueprint(admin)
     app.register_blueprint(api)
+    app.register_blueprint(auth)
 
     # Регистрация обработчика для login_manager
     @login_manager.user_loader
