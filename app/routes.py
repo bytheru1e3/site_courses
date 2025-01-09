@@ -72,13 +72,23 @@ def process_and_index_file(material_file):
     """Обработка и индексация файла"""
     try:
         file_path = os.path.join(UPLOAD_FOLDER, material_file.file_path)
+        logger.info(f"Processing file: {file_path}")
+
+        # Используем FileProcessor для обработки файла и создания векторного представления
         vector = FileProcessor.process_file(file_path)
-        material_file.set_vector(vector)
-        db.session.commit()
-        logger.info(f"Файл {material_file.filename} успешно проиндексирован")
-        return True
+
+        if vector:
+            material_file.set_vector(vector)
+            material_file.is_indexed = True
+            db.session.commit()
+            logger.info(f"File {material_file.filename} successfully processed and indexed")
+            return True
+        else:
+            logger.error(f"Failed to process file {material_file.filename}")
+            return False
+
     except Exception as e:
-        logger.error(f"Ошибка при индексации файла {material_file.filename}: {str(e)}")
+        logger.error(f"Error processing file {material_file.filename}: {str(e)}")
         return False
 
 @main.route('/add_course', methods=['POST'])
@@ -219,18 +229,31 @@ def upload_file(material_id):
                 material_id=material_id,
                 filename=filename,
                 file_path=os.path.join(str(material_id), filename),
-                file_type=file_type
+                file_type=file_type,
+                is_indexed=False
             )
             db.session.add(material_file)
             db.session.commit()
 
+            # Запускаем обработку и индексацию файла
             if process_and_index_file(material_file):
                 flash('Файл успешно загружен и проиндексирован', 'success')
+
+                # Добавляем уведомление об успешной загрузке
+                if current_user and current_user.is_authenticated:
+                    notification = Notification(
+                        user_id=current_user.id,
+                        title='Файл обработан',
+                        message=f'Файл {filename} успешно загружен и проиндексирован',
+                        type='success'
+                    )
+                    db.session.add(notification)
+                    db.session.commit()
             else:
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
 
         except Exception as e:
-            logger.error(f"Ошибка при загрузке файла: {str(e)}")
+            logger.error(f"Error uploading file: {str(e)}")
             flash('Произошла ошибка при загрузке файла', 'error')
 
     return redirect(url_for('main.material', material_id=material_id))
