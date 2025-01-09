@@ -373,3 +373,58 @@ def add_user():
         flash('Произошла ошибка при создании пользователя', 'error')
 
     return redirect(url_for('admin.users'))
+
+@main.route('/chat')
+@login_required
+def chat():
+    """Страница чата с ИИ"""
+    try:
+        # Получаем список доступных курсов для текущего пользователя
+        if current_user.is_admin:
+            available_courses = Course.query.all()
+        else:
+            available_courses = current_user.available_courses.all()
+
+        return render_template('chat/index.html', courses=available_courses)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
+        flash('Произошла ошибка при загрузке чата', 'error')
+        return redirect(url_for('main.index'))
+
+@main.route('/chat/ask', methods=['POST'])
+@login_required
+def ask_question():
+    """Обработка вопроса к ИИ"""
+    try:
+        course_id = request.form.get('course_id')
+        question = request.form.get('question')
+
+        if not course_id or not question:
+            return jsonify({
+                'success': False,
+                'error': 'Необходимо выбрать курс и задать вопрос'
+            }), 400
+
+        # Проверяем доступ к курсу
+        course = Course.query.get_or_404(course_id)
+        if not current_user.is_admin and not current_user.has_access_to_course(course):
+            return jsonify({
+                'success': False,
+                'error': 'У вас нет доступа к этому курсу'
+            }), 403
+
+        # Здесь будет логика обработки вопроса через ИИ
+        # Пока возвращаем заглушку
+        response = {
+            'success': True,
+            'answer': 'Функционал ответов на вопросы находится в разработке.'
+        }
+
+        return jsonify(response)
+
+    except Exception as e:
+        logger.error(f"Ошибка при обработке вопроса: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Произошла ошибка при обработке вопроса'
+        }), 500
