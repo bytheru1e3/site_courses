@@ -136,7 +136,6 @@ class CourseBot:
                     reply_markup=keyboard
                 )
                 await callback_query.answer()
-
         except Exception as e:
             logger.error(f"Error in course_callback_handler: {e}", exc_info=True)
             await callback_query.answer("❌ Произошла ошибка при получении информации о курсе")
@@ -177,7 +176,6 @@ class CourseBot:
                     parse_mode="Markdown"
                 )
                 await callback_query.answer()
-
         except Exception as e:
             logger.error(f"Error in materials_callback_handler: {e}", exc_info=True)
             await callback_query.answer("❌ Произошла ошибка при получении материалов курса")

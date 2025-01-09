@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_from_directory
-from app.models import Course, Material, MaterialFile, User
+from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
 import logging
 from app.services.file_processor import FileProcessor
@@ -7,6 +7,7 @@ import os
 import shutil
 from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
+from flask_login import current_user, login_required
 
 logger = logging.getLogger(__name__)
 
@@ -28,25 +29,38 @@ def index():
 @main.route('/course/<int:course_id>/manage_access', methods=['GET', 'POST'])
 def manage_course_access(course_id):
     """Управление доступом пользователей к курсу"""
-    course = Course.query.get_or_404(course_id)
-    if request.method == 'POST':
-        user_id = request.form.get('user_id')
-        action = request.form.get('action')
+    try:
+        course = Course.query.get_or_404(course_id)
 
-        user = User.query.get_or_404(user_id)
-        if action == 'grant':
-            if not user.has_access_to_course(course):
-                user.available_courses.append(course)
-                db.session.commit()
-                flash(f'Доступ предоставлен пользователю {user.username}', 'success')
-        elif action == 'revoke':
-            if user.has_access_to_course(course):
-                user.available_courses.remove(course)
-                db.session.commit()
-                flash(f'Доступ отозван у пользователя {user.username}', 'success')
+        if request.method == 'POST':
+            user_id = request.form.get('user_id')
+            action = request.form.get('action')
 
-    users = User.query.filter_by(is_admin=False).all()
-    return render_template('course/manage_access.html', course=course, users=users)
+            if not user_id or not action:
+                flash('Неверные параметры запроса', 'error')
+                return redirect(url_for('main.manage_course_access', course_id=course_id))
+
+            user = User.query.get_or_404(user_id)
+
+            if action == 'grant':
+                if not user.has_access_to_course(course):
+                    user.available_courses.append(course)
+                    db.session.commit()
+                    flash(f'Доступ предоставлен пользователю {user.username}', 'success')
+            elif action == 'revoke':
+                if user.has_access_to_course(course):
+                    user.available_courses.remove(course)
+                    db.session.commit()
+                    flash(f'Доступ отозван у пользователя {user.username}', 'success')
+
+        # Получаем список всех пользователей для управления доступом
+        users = User.query.filter_by(is_admin=False).all()
+        return render_template('course/manage_access.html', course=course, users=users)
+
+    except Exception as e:
+        logger.error(f"Ошибка при управлении доступом к курсу: {str(e)}")
+        flash('Произошла ошибка при управлении доступом', 'error')
+        return redirect(url_for('main.index'))
 
 @main.route('/course/<int:course_id>')
 def course(course_id):
@@ -69,30 +83,44 @@ def process_and_index_file(material_file):
 
 @main.route('/add_course', methods=['POST'])
 def add_course():
-    title = request.form.get('title')
-    description = request.form.get('description')
-
+    """Добавление нового курса"""
     try:
-        # Получаем или создаем системного пользователя
-        system_user = User.query.filter_by(username='system').first()
-        if not system_user:
-            system_user = User(
-                username='system',
-                email='system@example.com',
-                is_admin=True
-            )
-            system_user.set_password('system')
-            db.session.add(system_user)
-            db.session.commit()
+        title = request.form.get('title')
+        description = request.form.get('description')
+
+        if not title:
+            flash('Название курса обязательно', 'error')
+            return redirect(url_for('main.index'))
+
+        # Получаем текущего пользователя через flask-login
+        if current_user and current_user.is_authenticated:
+            user_id = current_user.id
+        else:
+            # Если пользователь не аутентифицирован, используем системного пользователя
+            system_user = User.query.filter_by(username='system').first()
+            if not system_user:
+                system_user = User(
+                    username='system',
+                    email='system@example.com',
+                    is_admin=True
+                )
+                system_user.set_password('system')
+                db.session.add(system_user)
+                db.session.commit()
+            user_id = system_user.id
 
         course = Course(
             title=title,
             description=description,
-            user_id=system_user.id
+            user_id=user_id
         )
+
         db.session.add(course)
         db.session.commit()
+
+        logger.info(f"Создан новый курс: {title}")
         flash('Курс успешно создан', 'success')
+
     except Exception as e:
         logger.error(f"Ошибка при создании курса: {str(e)}")
         db.session.rollback()
@@ -250,8 +278,21 @@ def download_file(file_id):
 @main.route('/notifications')
 def notifications():
     """Просмотр всех уведомлений"""
-    notifications = []  # Пустой список для демонстрации
-    return render_template('notifications.html', notifications=notifications, is_admin=True)
+    try:
+        # Получаем все активные уведомления для текущего пользователя
+        if current_user and current_user.is_authenticated:
+            notifications = Notification.query.filter_by(
+                user_id=current_user.id,
+                is_deleted=False
+            ).order_by(Notification.created_at.desc()).all()
+        else:
+            notifications = []
+
+        return render_template('notifications.html', notifications=notifications)
+    except Exception as e:
+        logger.error(f"Ошибка при получении уведомлений: {str(e)}")
+        flash('Произошла ошибка при загрузке уведомлений', 'error')
+        return redirect(url_for('main.index'))
 
 @main.route('/notifications/unread')
 def get_unread_notifications():

@@ -21,4 +21,5 @@ dependencies = [
     "twilio>=9.4.1",
     "aiogram==3.3.0",
     "slack-sdk>=3.34.0",
+    "sqlalchemy>=2.0.36",
 ]
