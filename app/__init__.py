@@ -2,7 +2,6 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 import logging
 import os
-from flask_login import LoginManager
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG)
@@ -10,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 # Инициализация расширений
 db = SQLAlchemy()
-login_manager = LoginManager()
 
 def create_app():
     app = Flask(__name__)
@@ -21,27 +19,18 @@ def create_app():
 
     # Инициализация расширений
     db.init_app(app)
-    login_manager.init_app(app)
-    login_manager.login_view = 'auth.login'
-    login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
-    login_manager.login_message_category = 'warning'
 
     # Регистрация блюпринтов
     from app.routes import main
     from app.admin import admin
     from app.api import api
-    from app.auth import auth
+    #from app.auth import auth #Removed auth blueprint registration
 
     app.register_blueprint(main)
     app.register_blueprint(admin)
     app.register_blueprint(api)
-    app.register_blueprint(auth)
+    #app.register_blueprint(auth) #Removed auth blueprint registration
 
-    # Регистрация обработчика для login_manager
-    @login_manager.user_loader
-    def load_user(user_id):
-        from app.models import User
-        return User.query.get(int(user_id))
 
     # Создание таблиц базы данных
     with app.app_context():

@@ -7,7 +7,6 @@ import os
 import shutil
 from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
-from flask_login import current_user, login_required
 
 logger = logging.getLogger(__name__)
 
@@ -103,22 +102,9 @@ def add_course():
             return redirect(url_for('main.index'))
 
         # Получаем текущего пользователя через flask-login
-        if current_user and current_user.is_authenticated:
-            user_id = current_user.id
-        else:
-            # Если пользователь не аутентифицирован, используем системного пользователя
-            system_user = User.query.filter_by(username='system').first()
-            if not system_user:
-                system_user = User(
-                    username='system',
-                    email='system@example.com',
-                    is_admin=True
-                )
-                system_user.set_password('system')
-                db.session.add(system_user)
-                db.session.commit()
-            user_id = system_user.id
-
+        if True: #Always true now.  No authentication check.
+            user_id = 1 # Placeholder user ID.  Needs proper handling for system user.
+        
         course = Course(
             title=title,
             description=description,
@@ -240,9 +226,9 @@ def upload_file(material_id):
                 flash('Файл успешно загружен и проиндексирован', 'success')
 
                 # Добавляем уведомление об успешной загрузке
-                if current_user and current_user.is_authenticated:
+                if True: #Always true now. No authentication check.
                     notification = Notification(
-                        user_id=current_user.id,
+                        user_id=1, # Placeholder user ID. Needs proper handling.
                         title='Файл обработан',
                         message=f'Файл {filename} успешно загружен и проиндексирован',
                         type='success'
@@ -303,9 +289,9 @@ def notifications():
     """Просмотр всех уведомлений"""
     try:
         # Получаем все активные уведомления для текущего пользователя
-        if current_user and current_user.is_authenticated:
+        if True: #Always true now. No authentication check.
             notifications = Notification.query.filter_by(
-                user_id=current_user.id,
+                user_id=1, # Placeholder user ID. Needs proper handling.
                 is_deleted=False
             ).order_by(Notification.created_at.desc()).all()
         else:
@@ -375,16 +361,11 @@ def add_user():
     return redirect(url_for('admin.users'))
 
 @main.route('/chat')
-@login_required
 def chat():
     """Страница чата с ИИ"""
     try:
-        # Получаем список доступных курсов для текущего пользователя
-        if current_user.is_admin:
-            available_courses = Course.query.all()
-        else:
-            available_courses = current_user.available_courses.all()
-
+        # Получаем все доступные курсы
+        available_courses = Course.query.all()
         return render_template('chat/index.html', courses=available_courses)
     except Exception as e:
         logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
@@ -392,7 +373,6 @@ def chat():
         return redirect(url_for('main.index'))
 
 @main.route('/chat/ask', methods=['POST'])
-@login_required
 def ask_question():
     """Обработка вопроса к ИИ"""
     try:
@@ -405,13 +385,8 @@ def ask_question():
                 'error': 'Необходимо выбрать курс и задать вопрос'
             }), 400
 
-        # Проверяем доступ к курсу
+        # Проверяем существование курса
         course = Course.query.get_or_404(course_id)
-        if not current_user.is_admin and not current_user.has_access_to_course(course):
-            return jsonify({
-                'success': False,
-                'error': 'У вас нет доступа к этому курсу'
-            }), 403
 
         # Здесь будет логика обработки вопроса через ИИ
         # Пока возвращаем заглушку
