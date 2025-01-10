@@ -24,11 +24,12 @@ def create_app():
     from app.routes import main
     from app.admin import admin
     from app.api import api
+    from app.api.telegram import telegram_api  # Добавляем новый blueprint
 
     app.register_blueprint(main)
     app.register_blueprint(admin)
     app.register_blueprint(api)
-
+    app.register_blueprint(telegram_api)  # Регистрируем новый blueprint
 
     # Создание таблиц базы данных
     with app.app_context():

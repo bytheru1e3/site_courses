@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 API_BASE_URL = "http://127.0.0.1:5000/api/telegram"  # Адрес вашего Flask API
 
+
 class CourseBot:
     def __init__(self, app: Flask):
         if not app:
@@ -125,88 +126,4 @@ class CourseBot:
             logger.error(f"Error in help handler: {e}", exc_info=True)
             await message.reply("❌ Произошла ошибка при обработке команды")
 
-    async def list_courses_handler(self, message: types.Message):
-        """Обработчик команды /courses"""
-        try:
-            with self.app.app_context():
-                courses = Course.query.all()
-                if not courses:
-                    await message.answer("📚 На данный момент нет доступных курсов")
-                    return
-
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(
-                        text=f"📘 {course.title}",
-                        callback_data=f"course_{course.id}"
-                    )]
-                    for course in courses
-                ])
-
-                await message.answer("📚 Доступные курсы:", reply_markup=keyboard)
-                logger.info(f"Courses listed for user {message.from_user.id}")
-        except Exception as e:
-            logger.error(f"Error in list courses handler: {e}")
-            await message.answer("❌ Произошла ошибка при получении списка курсов")
-
-    async def course_callback_handler(self, callback: types.CallbackQuery):
-        """Обработчик выбора курса"""
-        try:
-            course_id = int(callback.data.split('_')[1])
-            with self.app.app_context():
-                course = Course.query.get(course_id)
-                if not course:
-                    await callback.answer("❌ Курс не найден")
-                    return
-
-                text = f"📘 {course.title}\n\n{course.description or 'Описание отсутствует'}"
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(
-                        text="📚 Материалы курса",
-                        callback_data=f"materials_{course_id}"
-                    )]
-                ])
-
-                await callback.message.edit_text(text, reply_markup=keyboard)
-                await callback.answer()
-        except Exception as e:
-            logger.error(f"Error in course callback handler: {e}")
-            await callback.answer("❌ Произошла ошибка")
-
-    async def materials_callback_handler(self, callback: types.CallbackQuery):
-        """Обработчик просмотра материалов курса"""
-        try:
-            course_id = int(callback.data.split('_')[1])
-            with self.app.app_context():
-                course = Course.query.get(course_id)
-                if not course:
-                    await callback.answer("❌ Курс не найден")
-                    return
-
-                materials = course.materials
-                if not materials:
-                    await callback.message.edit_text("В этом курсе пока нет материалов")
-                    await callback.answer()
-                    return
-
-                text = f"📚 Материалы курса {course.title}:\n\n"
-                for material in materials:
-                    text += f"📝 {material.title}\n"
-                    if material.files:
-                        for file in material.files:
-                            text += f"📎 {file.filename}\n"
-                    text += "\n"
-
-                await callback.message.edit_text(text)
-                await callback.answer()
-        except Exception as e:
-            logger.error(f"Error in materials callback handler: {e}")
-            await callback.answer("❌ Произошла ошибка")
-
-    async def start_polling(self):
-        """Запуск бота"""
-        try:
-            logger.info("Starting bot polling...")
-            await self.dp.start_polling(self.bot)
-        except Exception as e:
-            logger.error(f"Error starting bot: {e}")
-            raise
+    # Оставьте list_courses_handler, course_callback_handler и materials_callback_handler без изменений

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from app import create_app
 from app.bot.bot import CourseBot
 
 # Настройка логирования
@@ -12,8 +13,11 @@ logger = logging.getLogger(__name__)
 async def main():
     """Основная функция запуска бота"""
     try:
+        # Создаем Flask приложение
+        app = create_app()
+
         # Создаем и запускаем бота
-        bot = CourseBot()
+        bot = CourseBot(app)
         logger.info("Bot instance created successfully")
         await bot.start_polling()
 
