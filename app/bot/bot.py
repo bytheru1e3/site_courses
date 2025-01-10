@@ -6,6 +6,8 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from app.models import Course, db, User
 from flask import Flask
 import requests
+from app.services.file_processor import FileProcessor
+from app.services.vector_db import VectorDB
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,7 @@ class CourseBot:
             self.dp.message.register(self.auth_handler, Command("auth"))
             self.dp.message.register(self.list_courses_handler, Command("courses"))
             self.dp.message.register(self.help_handler, Command("help"))
+            self.dp.message.register(self.ask_handler, Command("ask"))  # Новый обработчик для вопросов
             self.dp.callback_query.register(
                 self.course_callback_handler,
                 lambda c: c.data.startswith('course_')
@@ -57,6 +60,7 @@ class CourseBot:
                 "/register - Зарегистрироваться\n"
                 "/auth - Войти в систему\n"
                 "/courses - Просмотр списка курсов\n"
+                "/ask - Задать вопрос по материалам курса\n"
                 "/help - Помощь и информация"
             )
             await self.bot.send_message(chat_id=message.chat.id, text=welcome_text)
@@ -115,10 +119,12 @@ class CourseBot:
                 "2️⃣ /register <email> - Зарегистрироваться\n"
                 "3️⃣ /auth - Войти в систему\n"
                 "4️⃣ /courses - Показать список доступных курсов\n"
-                "5️⃣ /help - Показать это сообщение\n\n"
+                "5️⃣ /ask <id_курса> <вопрос> - Задать вопрос по материалам курса\n"
+                "6️⃣ /help - Показать это сообщение\n\n"
                 "После выбора курса вы сможете:\n"
                 "📚 Просматривать материалы курса\n"
-                "📝 Получать информацию о материалах"
+                "📝 Получать информацию о материалах\n"
+                "❓ Задавать вопросы по материалам"
             )
             await message.reply(help_text)
         except Exception as e:
@@ -201,6 +207,61 @@ class CourseBot:
         except Exception as e:
             logger.error(f"Error in materials callback handler: {e}")
             await callback.answer("❌ Произошла ошибка")
+
+    async def ask_handler(self, message: types.Message):
+        """Обработчик команды /ask для вопросов по материалам"""
+        try:
+            # Проверяем формат команды
+            command_parts = message.text.split(maxsplit=2)
+            if len(command_parts) < 3:
+                await message.reply(
+                    "Для поиска используйте формат:\n"
+                    "/ask <id_курса> <ваш_вопрос>\n"
+                    "Например: /ask 1 Что такое векторная база данных?"
+                )
+                return
+
+            # Получаем ID курса и вопрос
+            try:
+                course_id = int(command_parts[1])
+            except ValueError:
+                await message.reply("ID курса должен быть числом")
+                return
+
+            question = command_parts[2]
+
+            with self.app.app_context():
+                # Проверяем существование курса
+                course = Course.query.get(course_id)
+                if not course:
+                    await message.reply("❌ Курс не найден")
+                    return
+
+                # Проверяем доступ пользователя к курсу
+                user = User.query.filter_by(telegram_id=str(message.from_user.id)).first()
+                if not user or not user.has_access_to_course(course):
+                    await message.reply("❌ У вас нет доступа к этому курсу")
+                    return
+
+                # Поиск релевантных материалов
+                await message.reply("🔍 Ищу ответ на ваш вопрос...")
+                search_results = FileProcessor.search_similar_documents(question, top_k=3)
+
+                if not search_results:
+                    await message.reply("К сожалению, я не нашел релевантной информации по вашему вопросу")
+                    return
+
+                # Формируем ответ
+                response = "📚 Вот что я нашел по вашему вопросу:\n\n"
+                for idx, result in enumerate(search_results, 1):
+                    response += f"{idx}. {result.get('text', 'Текст отсутствует')}\n\n"
+
+                await message.reply(response)
+                logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
+
+        except Exception as e:
+            logger.error(f"Error in ask handler: {e}", exc_info=True)
+            await message.reply("❌ Произошла ошибка при обработке вашего вопроса")
 
     async def start_polling(self):
         """Запуск бота"""

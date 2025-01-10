@@ -223,43 +223,50 @@ def upload_file(material_id):
 
             # Полный путь к файлу
             file_path = os.path.join(material_folder, safe_filename)
-            file.save(file_path)
 
+            # Сохраняем файл
+            file.save(file_path)
             logger.info(f"Файл {original_filename} успешно сохранен как {safe_filename} в {file_path}")
 
-            # Создаем запись в базе данных (сохраняем оригинальное имя)
+            # Создаем запись в базе данных
             material_file = MaterialFile(
                 material_id=material_id,
                 filename=original_filename,  # Сохраняем оригинальное имя для отображения
-                file_path=os.path.join(str(material_id), safe_filename),  # Сохраняем транслитерированное имя в системе
+                file_path=os.path.join(str(material_id), safe_filename),  # Относительный путь для хранения
                 file_type=file_ext.lower()[1:],
                 is_indexed=False
             )
+
             db.session.add(material_file)
             db.session.commit()
 
             # Обрабатываем и индексируем файл
-            vector = FileProcessor.process_file(file_path)
+            try:
+                vector = FileProcessor.process_file(file_path)
 
-            if vector is not None:
-                material_file.set_vector(vector)
-                material_file.is_indexed = True
-                db.session.commit()
+                if vector is not None:
+                    material_file.set_vector(vector)
+                    material_file.is_indexed = True
+                    db.session.commit()
 
-                flash('Файл успешно загружен и проиндексирован', 'success')
+                    flash('Файл успешно загружен и проиндексирован', 'success')
+                    logger.info(f"Файл {original_filename} успешно проиндексирован")
 
-                # Добавляем уведомление об успешной загрузке
-                notification = Notification(
-                    user_id=1,  # TODO: Replace with current_user.id when auth is implemented
-                    title='Файл обработан',
-                    message=f'Файл {original_filename} успешно загружен и проиндексирован',
-                    type='success'
-                )
-                db.session.add(notification)
-                db.session.commit()
-            else:
+                    # Добавляем уведомление об успешной загрузке
+                    notification = Notification(
+                        user_id=1,  # TODO: Replace with current_user.id when auth is implemented
+                        title='Файл обработан',
+                        message=f'Файл {original_filename} успешно загружен и проиндексирован',
+                        type='success'
+                    )
+                    db.session.add(notification)
+                    db.session.commit()
+                else:
+                    flash('Файл загружен, но возникла ошибка при индексации', 'warning')
+                    logger.error(f"Не удалось создать векторное представление для файла {original_filename}")
+            except Exception as e:
+                logger.error(f"Ошибка при индексации файла: {str(e)}")
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
-                logger.error(f"Не удалось создать векторное представление для файла {original_filename}")
 
         except Exception as e:
             logger.error(f"Ошибка при сохранении файла: {str(e)}")
