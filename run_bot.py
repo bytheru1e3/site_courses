@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from app import create_app
 from app.bot.bot import CourseBot
 
 # Настройка логирования
@@ -13,17 +12,13 @@ logger = logging.getLogger(__name__)
 async def main():
     """Основная функция запуска бота"""
     try:
-        # Создаем приложение Flask
-        app = create_app()
-        logger.info("Flask application created successfully")
-
         # Создаем и запускаем бота
-        bot = CourseBot(app=app)
+        bot = CourseBot()
         logger.info("Bot instance created successfully")
-
         await bot.start_polling()
+
     except Exception as e:
-        logger.error(f"Failed to start bot: {e}", exc_info=True)
+        logger.error(f"Failed to start bot: {e}")
         raise
 
 if __name__ == '__main__':
@@ -32,4 +27,4 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     except Exception as e:
-        logger.error(f"Critical error in bot execution: {e}", exc_info=True)
+        logger.error(f"Critical error in bot execution: {e}")

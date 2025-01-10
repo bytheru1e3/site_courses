@@ -193,26 +193,38 @@ def delete_material(material_id):
 
 @main.route('/upload_file/<int:material_id>', methods=['POST'])
 def upload_file(material_id):
-    if 'file' not in request.files:
-        flash('Файл не выбран', 'error')
-        return redirect(url_for('main.material', material_id=material_id))
+    """Загрузка файла для материала"""
+    try:
+        # Проверяем наличие файла в запросе
+        if 'file' not in request.files:
+            flash('Файл не выбран', 'error')
+            return redirect(url_for('main.material', material_id=material_id))
 
-    file = request.files['file']
-    if file.filename == '':
-        flash('Файл не выбран', 'error')
-        return redirect(url_for('main.material', material_id=material_id))
+        file = request.files['file']
+        if not file or file.filename == '':
+            flash('Файл не выбран', 'error')
+            return redirect(url_for('main.material', material_id=material_id))
 
-    if file and allowed_file(file.filename):
+        if not allowed_file(file.filename):
+            flash(f'Недопустимый тип файла. Разрешены только: {", ".join(ALLOWED_EXTENSIONS)}', 'error')
+            return redirect(url_for('main.material', material_id=material_id))
+
         try:
+            # Безопасное имя файла
             filename = secure_filename(file.filename)
             file_type = filename.rsplit('.', 1)[1].lower()
 
+            # Создаем папку для материала
             material_folder = os.path.join(UPLOAD_FOLDER, str(material_id))
             os.makedirs(material_folder, exist_ok=True)
 
+            # Полный путь к файлу
             file_path = os.path.join(material_folder, filename)
             file.save(file_path)
 
+            logger.info(f"Файл {filename} успешно сохранен в {file_path}")
+
+            # Создаем запись в базе данных
             material_file = MaterialFile(
                 material_id=material_id,
                 filename=filename,
@@ -223,13 +235,19 @@ def upload_file(material_id):
             db.session.add(material_file)
             db.session.commit()
 
-            # Запускаем обработку и индексацию файла
-            if process_and_index_file(material_file):
+            # Обрабатываем и индексируем файл
+            vector = FileProcessor.process_file(file_path)
+
+            if vector is not None:
+                material_file.set_vector(vector)
+                material_file.is_indexed = True
+                db.session.commit()
+
                 flash('Файл успешно загружен и проиндексирован', 'success')
 
                 # Добавляем уведомление об успешной загрузке
                 notification = Notification(
-                    user_id=1, # Placeholder user ID. Needs proper handling.
+                    user_id=1,  # TODO: Replace with current_user.id when auth is implemented
                     title='Файл обработан',
                     message=f'Файл {filename} успешно загружен и проиндексирован',
                     type='success'
@@ -238,10 +256,21 @@ def upload_file(material_id):
                 db.session.commit()
             else:
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
+                logger.error(f"Не удалось создать векторное представление для файла {filename}")
 
         except Exception as e:
-            logger.error(f"Error uploading file: {str(e)}")
-            flash('Произошла ошибка при загрузке файла', 'error')
+            logger.error(f"Ошибка при сохранении файла: {str(e)}")
+            db.session.rollback()
+            flash('Произошла ошибка при сохранении файла', 'error')
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
+
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке файла: {str(e)}")
+        flash('Произошла ошибка при загрузке файла', 'error')
 
     return redirect(url_for('main.material', material_id=material_id))
 
@@ -322,8 +351,6 @@ ALLOWED_EXTENSIONS = {'docx', 'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-from flask import send_from_directory
 
 @main.route('/admin/users/add', methods=['POST'])
 def add_user():

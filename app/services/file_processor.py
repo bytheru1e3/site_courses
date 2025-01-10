@@ -31,26 +31,34 @@ class FileProcessor:
                     text = FileProcessor._process_pdf(file_path)
                 else:
                     raise ValueError(f"Неподдерживаемый тип файла: {file_ext}")
+
+                if not text.strip():
+                    raise ValueError("Не удалось извлечь текст из файла")
+
             except Exception as e:
                 logger.error(f"Ошибка при извлечении текста из файла {file_path}: {str(e)}")
-                text = "Ошибка при извлечении текста"
+                return None
 
-            # Создаем векторное представление
+            # Создаем векторное представление и добавляем в базу
             try:
                 vector_db = FileProcessor.get_vector_db()
                 vector = vector_db.create_embedding(text)
 
                 # Добавляем документ в векторную базу
-                vector_db.add_document(text, file_path)
+                if vector_db.add_document(text, file_path):
+                    logger.info(f"Файл {file_path} успешно добавлен в векторную базу")
+                    return vector
+                else:
+                    logger.error(f"Не удалось добавить файл {file_path} в векторную базу")
+                    return None
 
-                return vector
             except Exception as e:
                 logger.error(f"Ошибка при создании векторного представления: {str(e)}")
-                return []
+                return None
 
         except Exception as e:
             logger.error(f"Ошибка при обработке файла {file_path}: {str(e)}")
-            return []
+            return None
 
     @staticmethod
     def _process_docx(file_path):
@@ -73,11 +81,12 @@ class FileProcessor:
 
             text = '\n'.join(text_parts)
             if not text.strip():
-                return "Документ пуст или не содержит текста"
+                logger.warning(f"DOCX файл {file_path} не содержит текста")
+                return ""
             return text
         except Exception as e:
-            logger.error(f"Ошибка при обработке DOCX файла: {str(e)}")
-            return "Ошибка при чтении DOCX файла"
+            logger.error(f"Ошибка при обработке DOCX файла {file_path}: {str(e)}")
+            raise
 
     @staticmethod
     def _process_pdf(file_path):
@@ -93,11 +102,12 @@ class FileProcessor:
 
             text = '\n'.join(text_parts)
             if not text.strip():
-                return "PDF документ пуст или не содержит текста"
+                logger.warning(f"PDF файл {file_path} не содержит текста")
+                return ""
             return text
         except Exception as e:
-            logger.error(f"Ошибка при обработке PDF файла: {str(e)}")
-            return "Ошибка при чтении PDF файла"
+            logger.error(f"Ошибка при обработке PDF файла {file_path}: {str(e)}")
+            raise
 
     @staticmethod
     def search_similar_documents(query, top_k=3):
