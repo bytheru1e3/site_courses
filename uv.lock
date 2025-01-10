@@ -1396,6 +1396,7 @@ dependencies = [
     { name = "slack-sdk" },
     { name = "sqlalchemy" },
     { name = "trafilatura" },
+    { name = "transliterate" },
     { name = "twilio" },
     { name = "werkzeug" },
 ]
@@ -1422,6 +1423,7 @@ requires-dist = [
     { name = "slack-sdk", specifier = ">=3.34.0" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
     { name = "trafilatura", specifier = ">=2.0.0" },
+    { name = "transliterate", specifier = ">=1.10.2" },
     { name = "twilio", specifier = ">=9.4.1" },
     { name = "werkzeug", specifier = ">=3.1.3" },
 ]
@@ -1771,6 +1773,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/15/1a/936aeb4f88112f670b604f5748034568dbc2b9bbb457a8d4518b1a15510a/transformers-4.47.1.tar.gz", hash = "sha256:6c29c05a5f595e278481166539202bf8641281536df1c42357ee58a45d0a564a", size = 8707421 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f2/3a/8bdab26e09c5a242182b7ba9152e216d5ab4ae2d78c4298eb4872549cd35/transformers-4.47.1-py3-none-any.whl", hash = "sha256:d2f5d19bb6283cd66c893ec7e6d931d6370bbf1cc93633326ff1f41a40046c9c", size = 10133598 },
+]
+
+[[package]]
+name = "transliterate"
+version = "1.10.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/e3/84a89c289a5cf00c7aeabfb5a862a6e4cdc25819701cf1c454a18d32ac33/transliterate-1.10.2.tar.gz", hash = "sha256:bc608e0d48e687db9c2b1d7ea7c381afe0d1849cad216087d8e03d8d06a57c85", size = 43088 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/6e/9a9d597dbdd6d0172427c8cc07c35736471e631060df9e59eeb87687f817/transliterate-1.10.2-py2.py3-none-any.whl", hash = "sha256:010a5021bf6021689c4fade0985f3f7b3db1f2f16a48a09a56797f171c08ed42", size = 45780 },
 ]
 
 [[package]]

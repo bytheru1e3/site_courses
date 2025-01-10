@@ -1,12 +1,13 @@
+import os
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_from_directory
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
 import logging
 from app.services.file_processor import FileProcessor
-import os
 import shutil
 from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
+from transliterate import translit
 
 logger = logging.getLogger(__name__)
 
@@ -205,31 +206,33 @@ def upload_file(material_id):
             flash('Файл не выбран', 'error')
             return redirect(url_for('main.material', material_id=material_id))
 
-        if not allowed_file(file.filename):
+        original_filename = file.filename
+        if not allowed_file(original_filename):
             flash(f'Недопустимый тип файла. Разрешены только: {", ".join(ALLOWED_EXTENSIONS)}', 'error')
             return redirect(url_for('main.material', material_id=material_id))
 
         try:
-            # Безопасное имя файла
-            filename = secure_filename(file.filename)
-            file_type = filename.rsplit('.', 1)[1].lower()
+            # Транслитерация имени файла и безопасное сохранение
+            filename_no_ext, file_ext = os.path.splitext(original_filename)
+            transliterated_filename = translit(filename_no_ext, 'ru', reversed=True)
+            safe_filename = secure_filename(transliterated_filename + file_ext)
 
             # Создаем папку для материала
             material_folder = os.path.join(UPLOAD_FOLDER, str(material_id))
             os.makedirs(material_folder, exist_ok=True)
 
             # Полный путь к файлу
-            file_path = os.path.join(material_folder, filename)
+            file_path = os.path.join(material_folder, safe_filename)
             file.save(file_path)
 
-            logger.info(f"Файл {filename} успешно сохранен в {file_path}")
+            logger.info(f"Файл {original_filename} успешно сохранен как {safe_filename} в {file_path}")
 
-            # Создаем запись в базе данных
+            # Создаем запись в базе данных (сохраняем оригинальное имя)
             material_file = MaterialFile(
                 material_id=material_id,
-                filename=filename,
-                file_path=os.path.join(str(material_id), filename),
-                file_type=file_type,
+                filename=original_filename,  # Сохраняем оригинальное имя для отображения
+                file_path=os.path.join(str(material_id), safe_filename),  # Сохраняем транслитерированное имя в системе
+                file_type=file_ext.lower()[1:],
                 is_indexed=False
             )
             db.session.add(material_file)
@@ -249,24 +252,24 @@ def upload_file(material_id):
                 notification = Notification(
                     user_id=1,  # TODO: Replace with current_user.id when auth is implemented
                     title='Файл обработан',
-                    message=f'Файл {filename} успешно загружен и проиндексирован',
+                    message=f'Файл {original_filename} успешно загружен и проиндексирован',
                     type='success'
                 )
                 db.session.add(notification)
                 db.session.commit()
             else:
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
-                logger.error(f"Не удалось создать векторное представление для файла {filename}")
+                logger.error(f"Не удалось создать векторное представление для файла {original_filename}")
 
         except Exception as e:
             logger.error(f"Ошибка при сохранении файла: {str(e)}")
             db.session.rollback()
             flash('Произошла ошибка при сохранении файла', 'error')
-            if os.path.exists(file_path):
+            if 'file_path' in locals() and os.path.exists(file_path):
                 try:
                     os.remove(file_path)
-                except:
-                    pass
+                except Exception as del_e:
+                    logger.error(f"Не удалось удалить файл после ошибки: {str(del_e)}")
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке файла: {str(e)}")
