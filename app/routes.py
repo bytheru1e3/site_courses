@@ -197,7 +197,6 @@ def delete_material(material_id):
 def upload_file(material_id):
     """Загрузка файла для материала"""
     try:
-        # Проверяем наличие файла в запросе
         if 'file' not in request.files:
             flash('Файл не выбран', 'error')
             return redirect(url_for('main.material', material_id=material_id))
@@ -210,14 +209,13 @@ def upload_file(material_id):
         material = Material.query.get_or_404(material_id)
         course_id = material.course_id
 
-        original_filename = file.filename
-        if not allowed_file(original_filename):
+        if not allowed_file(file.filename):
             flash(f'Недопустимый тип файла. Разрешены только: {", ".join(ALLOWED_EXTENSIONS)}', 'error')
             return redirect(url_for('main.material', material_id=material_id))
 
         try:
             # Транслитерация имени файла и безопасное сохранение
-            filename_no_ext, file_ext = os.path.splitext(original_filename)
+            filename_no_ext, file_ext = os.path.splitext(file.filename)
             transliterated_filename = translit(filename_no_ext, 'ru', reversed=True)
             safe_filename = secure_filename(transliterated_filename + file_ext)
 
@@ -230,12 +228,12 @@ def upload_file(material_id):
 
             # Сохраняем файл
             file.save(file_path)
-            logger.info(f"Файл {original_filename} успешно сохранен как {safe_filename}")
+            logger.info(f"Файл {file.filename} успешно сохранен как {safe_filename}")
 
             # Создаем запись в базе данных
             material_file = MaterialFile(
                 material_id=material_id,
-                filename=original_filename,
+                filename=file.filename,
                 file_path=os.path.join(str(material_id), safe_filename),
                 file_type=file_ext.lower()[1:],
                 is_indexed=False
@@ -250,10 +248,10 @@ def upload_file(material_id):
                 material_file.is_indexed = True
                 db.session.commit()
                 flash('Файл успешно загружен и проиндексирован', 'success')
-                logger.info(f"Файл {original_filename} успешно проиндексирован")
+                logger.info(f"Файл {file.filename} успешно проиндексирован")
             else:
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
-                logger.error(f"Не удалось проиндексировать файл {original_filename}")
+                logger.error(f"Не удалось проиндексировать файл {file.filename}")
 
         except Exception as e:
             logger.error(f"Ошибка при сохранении файла: {str(e)}")

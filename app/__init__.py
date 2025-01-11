@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager
 import logging
 import os
 
@@ -9,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Инициализация расширений
 db = SQLAlchemy()
+login_manager = LoginManager()
 
 def create_app():
     app = Flask(__name__)
@@ -19,6 +21,11 @@ def create_app():
 
     # Инициализация расширений
     db.init_app(app)
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+
+    # Создание папок для загрузки файлов
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     # Регистрация блюпринтов
     from app.routes import main
@@ -36,6 +43,11 @@ def create_app():
             logger.info("Database tables created successfully")
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")
-            db.session.rollback()
+
+    # Инициализация загрузчика пользователей
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import User
+        return User.query.get(int(user_id))
 
     return app

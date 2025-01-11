@@ -22,5 +22,14 @@ class Config:
 
     # Upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
-    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+    # Telegram Bot settings
+    TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+
+    # GigaChat settings
+    GIGACHAT_API_KEY = os.environ.get('GIGACHAT_API_KEY')
+
+    # Debug mode
+    DEBUG = True

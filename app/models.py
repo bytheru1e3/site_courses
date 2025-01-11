@@ -26,7 +26,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
-    telegram_id = db.Column(db.String(32), unique=True, nullable=True, index=True)  # Added telegram_id field
+    telegram_id = db.Column(db.String(32), unique=True, nullable=True, index=True)
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
@@ -37,8 +37,6 @@ class User(UserMixin, db.Model):
                                     cascade='all, delete-orphan')
     notifications = db.relationship('Notification', backref='user', lazy=True, 
                                   cascade='all, delete-orphan')
-
-    # Доступные курсы (для обычных пользователей)
     available_courses = db.relationship('Course', 
                                       secondary=course_users,
                                       primaryjoin='User.id == course_users.c.user_id',
@@ -56,20 +54,11 @@ class User(UserMixin, db.Model):
             return False
         return check_password_hash(self.password_hash, password)
 
-    def update_last_login(self):
-        self.last_login = datetime.utcnow()
-
-    def get_unread_notifications_count(self):
-        return Notification.query.filter_by(user_id=self.id, is_read=False).count()
-
     def has_access_to_course(self, course):
         """Проверяет, имеет ли пользователь доступ к курсу"""
         if self.is_admin or course.user_id == self.id:
             return True
         return self.available_courses.filter_by(id=course.id).first() is not None
-
-    def __repr__(self):
-        return f'<User {self.username}>'
 
 class Course(db.Model):
     __tablename__ = 'courses'
@@ -82,9 +71,6 @@ class Course(db.Model):
 
     # Relationships
     materials = db.relationship('Material', backref='course', lazy=True, cascade='all, delete-orphan')
-
-    def __repr__(self):
-        return f'<Course {self.title}>'
 
 class Material(db.Model):
     __tablename__ = 'materials'
@@ -136,20 +122,3 @@ class Notification(db.Model):
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     read_at = db.Column(db.DateTime)
-
-    def mark_as_read(self):
-        if not self.is_read:
-            self.is_read = True
-            self.read_at = datetime.utcnow()
-            db.session.commit()
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'type': self.type,
-            'title': self.title,
-            'message': self.message,
-            'is_read': self.is_read,
-            'created_at': self.created_at.isoformat(),
-            'read_at': self.read_at.isoformat() if self.read_at else None
-        }
