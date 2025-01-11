@@ -14,14 +14,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-try:
-    # Создание приложения
-    app = create_app()
+app = create_app()
 
-    if __name__ == '__main__':
+if __name__ == '__main__':
+    try:
         # Запуск приложения
         port = int(os.environ.get('PORT', 5000))
         app.run(host='0.0.0.0', port=port, debug=True)
-except Exception as e:
-    logger.error(f"Ошибка при запуске приложения: {str(e)}")
-    raise
+    except Exception as e:
+        logger.error(f"Ошибка при запуске приложения: {str(e)}")
+        raise
