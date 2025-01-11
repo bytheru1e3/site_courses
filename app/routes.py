@@ -8,6 +8,7 @@ import shutil
 from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
 from transliterate import translit
+from app.services.ai_processor import AIProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,9 @@ def upload_file(material_id):
             flash('Файл не выбран', 'error')
             return redirect(url_for('main.material', material_id=material_id))
 
+        material = Material.query.get_or_404(material_id)
+        course_id = material.course_id
+
         original_filename = file.filename
         if not allowed_file(original_filename):
             flash(f'Недопустимый тип файла. Разрешены только: {", ".join(ALLOWED_EXTENSIONS)}', 'error')
@@ -226,13 +230,13 @@ def upload_file(material_id):
 
             # Сохраняем файл
             file.save(file_path)
-            logger.info(f"Файл {original_filename} успешно сохранен как {safe_filename} в {file_path}")
+            logger.info(f"Файл {original_filename} успешно сохранен как {safe_filename}")
 
             # Создаем запись в базе данных
             material_file = MaterialFile(
                 material_id=material_id,
-                filename=original_filename,  # Сохраняем оригинальное имя для отображения
-                file_path=os.path.join(str(material_id), safe_filename),  # Относительный путь для хранения
+                filename=original_filename,
+                file_path=os.path.join(str(material_id), safe_filename),
                 file_type=file_ext.lower()[1:],
                 is_indexed=False
             )
@@ -240,33 +244,16 @@ def upload_file(material_id):
             db.session.add(material_file)
             db.session.commit()
 
-            # Обрабатываем и индексируем файл
-            try:
-                vector = FileProcessor.process_file(file_path)
-
-                if vector is not None:
-                    material_file.set_vector(vector)
-                    material_file.is_indexed = True
-                    db.session.commit()
-
-                    flash('Файл успешно загружен и проиндексирован', 'success')
-                    logger.info(f"Файл {original_filename} успешно проиндексирован")
-
-                    # Добавляем уведомление об успешной загрузке
-                    notification = Notification(
-                        user_id=1,  # TODO: Replace with current_user.id when auth is implemented
-                        title='Файл обработан',
-                        message=f'Файл {original_filename} успешно загружен и проиндексирован',
-                        type='success'
-                    )
-                    db.session.add(notification)
-                    db.session.commit()
-                else:
-                    flash('Файл загружен, но возникла ошибка при индексации', 'warning')
-                    logger.error(f"Не удалось создать векторное представление для файла {original_filename}")
-            except Exception as e:
-                logger.error(f"Ошибка при индексации файла: {str(e)}")
+            # Добавляем файл в векторную базу
+            ai_processor = AIProcessor.get_instance()
+            if ai_processor.add_file_to_vector_db(file_path, course_id):
+                material_file.is_indexed = True
+                db.session.commit()
+                flash('Файл успешно загружен и проиндексирован', 'success')
+                logger.info(f"Файл {original_filename} успешно проиндексирован")
+            else:
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
+                logger.error(f"Не удалось проиндексировать файл {original_filename}")
 
         except Exception as e:
             logger.error(f"Ошибка при сохранении файла: {str(e)}")

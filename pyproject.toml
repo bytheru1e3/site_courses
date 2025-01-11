@@ -28,4 +28,7 @@ dependencies = [
     "python-telegram-bot>=21.10",
     "transliterate>=1.10.2",
     "requests>=2.32.3",
+    "gigachat>=0.1.37",
+    "langchain-core>=0.3.29",
+    "langchain-gigachat>=0.3.2",
 ]

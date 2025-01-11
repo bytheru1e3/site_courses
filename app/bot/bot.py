@@ -8,6 +8,7 @@ from flask import Flask
 import requests
 from app.services.file_processor import FileProcessor
 from app.services.vector_db import VectorDB
+from app.services.ai_processor import AIProcessor # Added import statement
 
 logger = logging.getLogger(__name__)
 
@@ -162,17 +163,18 @@ class CourseBot:
                     await message.reply("❌ У вас нет доступа к этому курсу")
                     return
 
-                # Поиск релевантных материалов
-                await message.reply("🔍 Ищу ответ на ваш вопрос...")
-                search_results = FileProcessor.search_similar_documents(question, top_k=3)
-
                 # Создаем клавиатуру с кнопками
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📝 Задать новый вопрос", callback_data="ask_new_question")],
                     [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
                 ])
 
-                if not search_results:
+                # Поиск ответа через AIProcessor
+                await message.reply("🔍 Ищу ответ на ваш вопрос...")
+                ai_processor = AIProcessor.get_instance()
+                response = ai_processor.answer_question(question, course_id)
+
+                if not response:
                     await message.reply(
                         "К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
                         "Попробуйте переформулировать вопрос или выбрать другой курс.",
@@ -181,21 +183,13 @@ class CourseBot:
                     return
 
                 # Формируем структурированный ответ
-                response = (
-                    f"📚 Результаты поиска по курсу «{course.title}»\n"
+                formatted_response = (
+                    f"📚 Ответ по курсу «{course.title}»\n"
                     f"❓ Ваш вопрос: {question}\n\n"
-                    "🔍 Найденная информация:\n"
+                    f"🔍 {response}\n"
                 )
 
-                for idx, result in enumerate(search_results, 1):
-                    text = result.get('text', '')
-                    # Ограничиваем длину текста для лучшей читаемости
-                    max_length = 300
-                    if len(text) > max_length:
-                        text = text[:max_length] + "..."
-                    response += f"\n{idx}. {text}\n"
-
-                await message.reply(response, reply_markup=keyboard)
+                await message.reply(formatted_response, reply_markup=keyboard)
                 logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
 
                 # Очищаем состояние пользователя
