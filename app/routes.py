@@ -5,7 +5,6 @@ from app import db
 import logging
 from app.services.file_processor import FileProcessor
 import shutil
-from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
 from transliterate import translit
 
@@ -16,22 +15,29 @@ main = Blueprint('main', __name__)
 @main.route('/')
 def index():
     """
-    Главная страница с админ-панелью
+    Главная страница с списком курсов
     """
-    courses = Course.query.all()
-    return render_template('index.html', courses=courses, is_admin=True)
+    try:
+        courses = Course.query.all()
+        return render_template('index.html', courses=courses)
+    except Exception as e:
+        logger.error(f"Error on index page: {str(e)}")
+        return "Internal Server Error", 500
 
 @main.route('/course/<int:course_id>')
 def course(course_id):
     """Просмотр курса"""
-    course = Course.query.get_or_404(course_id)
-    return render_template('course/view.html', course=course)
+    try:
+        course = Course.query.get_or_404(course_id)
+        return render_template('course/view.html', course=course)
+    except Exception as e:
+        logger.error(f"Error viewing course {course_id}: {str(e)}")
+        return redirect(url_for('main.index'))
 
 @main.route('/chat')
 def chat():
     """Страница чата с ИИ"""
     try:
-        # Получаем все доступные курсы
         available_courses = Course.query.all()
         return render_template('chat/index.html', courses=available_courses)
     except Exception as e:
@@ -52,14 +58,14 @@ def ask_question():
                 'error': 'Необходимо выбрать курс и задать вопрос'
             }), 400
 
-        # Проверяем существование курса
         course = Course.query.get_or_404(course_id)
 
-        # Здесь будет логика обработки вопроса через ИИ
-        # Пока возвращаем заглушку
+        # Используем FileProcessor для поиска релевантной информации
+        search_results = FileProcessor.search_similar_documents(question)
+
         response = {
             'success': True,
-            'answer': f'Это тестовый ответ на ваш вопрос по курсу "{course.title}": {question}'
+            'answer': search_results[0]['text'] if search_results else 'Информация не найдена'
         }
 
         return jsonify(response)
@@ -361,71 +367,3 @@ ALLOWED_EXTENSIONS = {'docx', 'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@main.route('/admin/users/add', methods=['POST'])
-def add_user():
-    """Добавление нового пользователя"""
-    try:
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        is_admin = bool(request.form.get('is_admin'))
-
-        # Проверка существования пользователя
-        if User.query.filter_by(username=username).first():
-            flash('Пользователь с таким именем уже существует', 'error')
-            return redirect(url_for('admin.users'))
-
-        if User.query.filter_by(email=email).first():
-            flash('Пользователь с таким email уже существует', 'error')
-            return redirect(url_for('admin.users'))
-
-        # Создание пользователя
-        user = User(username=username, email=email, is_admin=is_admin)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-
-        flash('Пользователь успешно создан', 'success')
-    except Exception as e:
-        logger.error(f"Ошибка при создании пользователя: {str(e)}")
-        db.session.rollback()
-        flash('Произошла ошибка при создании пользователя', 'error')
-
-    return redirect(url_for('admin.users'))
-
-@main.route('/manage_course_access/<int:course_id>', methods=['GET', 'POST'])
-def manage_course_access(course_id):
-    """Управление доступом пользователей к курсу"""
-    try:
-        course = Course.query.get_or_404(course_id)
-
-        if request.method == 'POST':
-            user_id = request.form.get('user_id')
-            action = request.form.get('action')
-
-            if not user_id or not action:
-                flash('Неверные параметры запроса', 'error')
-                return redirect(url_for('main.manage_course_access', course_id=course_id))
-
-            user = User.query.get_or_404(user_id)
-
-            if action == 'grant':
-                if not user.has_access_to_course(course):
-                    user.available_courses.append(course)
-                    db.session.commit()
-                    flash(f'Доступ предоставлен пользователю {user.username}', 'success')
-            elif action == 'revoke':
-                if user.has_access_to_course(course):
-                    user.available_courses.remove(course)
-                    db.session.commit()
-                    flash(f'Доступ отозван у пользователя {user.username}', 'success')
-
-        # Получаем список всех пользователей для управления доступом
-        users = User.query.filter_by(is_admin=False).all()
-        return render_template('course/manage_access.html', course=course, users=users)
-
-    except Exception as e:
-        logger.error(f"Ошибка при управлении доступом к курсу: {str(e)}")
-        flash('Произошла ошибка при управлении доступом', 'error')
-        return redirect(url_for('main.index'))

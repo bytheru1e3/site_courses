@@ -15,15 +15,6 @@ def main():
         # Создаем Flask приложение
         app = create_app()
         logger.info("Flask application created successfully")
-        
-        # Импортируем здесь, чтобы избежать циклических импортов
-        from app.bot.bot import CourseBot
-
-        # Создаем и запускаем бота
-        bot = CourseBot(app)
-        logger.info("Bot instance created successfully")
-        bot.start_polling() #Start polling directly
-
         return app
 
     except Exception as e:
