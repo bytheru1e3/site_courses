@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_from_directory
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
 import logging
@@ -42,7 +42,7 @@ def chat():
 
 @main.route('/chat/ask', methods=['POST'])
 def ask_question():
-    """Обработка вопроса к ИИ через веб-интерфейс или Telegram"""
+    """Обработка вопроса к ИИ"""
     try:
         course_id = request.form.get('course_id')
         question = request.form.get('question')
@@ -55,26 +55,19 @@ def ask_question():
 
         # Проверяем существование курса
         course = Course.query.get_or_404(course_id)
-        logger.info(f"Получен вопрос для курса {course.title}: {question}")
 
-        try:
-            # Получаем ответ от ИИ
-            vector_db_path = os.path.join(os.getcwd(), 'app', 'data', 'vector_store')
-            answer = answer_question(question, vector_db_path)
+        # Получаем путь к векторной базе данных
+        vector_db_path = os.path.join(os.getcwd(), 'app', 'data', 'vector_store')
 
-            response = {
-                'success': True,
-                'answer': answer
-            }
-            logger.info(f"Успешно получен ответ на вопрос")
-            return jsonify(response)
+        # Получаем ответ через AI модуль
+        answer = answer_question(question, vector_db_path)
 
-        except Exception as e:
-            logger.error(f"Ошибка при получении ответа от ИИ: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': 'Произошла ошибка при обработке вопроса'
-            }), 500
+        response = {
+            'success': True,
+            'answer': answer
+        }
+
+        return jsonify(response)
 
     except Exception as e:
         logger.error(f"Ошибка при обработке вопроса: {str(e)}")
