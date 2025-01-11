@@ -9,8 +9,6 @@ from email_validator import validate_email, EmailNotValidError
 logger = logging.getLogger(__name__)
 auth = Blueprint('auth', __name__)
 
-# Временно отключенный маршрут регистрации
-"""
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -67,7 +65,7 @@ def register():
             flash('Произошла ошибка при регистрации. Пожалуйста, попробуйте позже.', 'error')
 
     return render_template('auth/register.html')
-"""
+
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
