@@ -21,23 +21,28 @@ def create_app():
     db.init_app(app)
 
     # Регистрация блюпринтов
-    from app.routes import main
-    from app.admin import admin
-    from app.api import api
-    from app.api.telegram import telegram_api  # Добавляем новый blueprint
+    try:
+        from app.routes import main
+        from app.admin import admin
+        from app.api import api
+        from app.api.telegram import telegram_api
 
-    app.register_blueprint(main)
-    app.register_blueprint(admin)
-    app.register_blueprint(api)
-    app.register_blueprint(telegram_api)  # Регистрируем новый blueprint
+        app.register_blueprint(main)
+        app.register_blueprint(admin)
+        app.register_blueprint(api)
+        app.register_blueprint(telegram_api)
 
-    # Создание таблиц базы данных
-    with app.app_context():
-        try:
-            db.create_all()
-            logger.info("Database tables created successfully")
-        except Exception as e:
-            logger.error(f"Error during database initialization: {e}")
-            db.session.rollback()
+        # Создание таблиц базы данных
+        with app.app_context():
+            try:
+                db.create_all()
+                logger.info("Database tables created successfully")
+            except Exception as e:
+                logger.error(f"Error during database initialization: {e}")
+                db.session.rollback()
+                raise
+    except Exception as e:
+        logger.error(f"Error during blueprint registration: {e}")
+        raise
 
     return app
