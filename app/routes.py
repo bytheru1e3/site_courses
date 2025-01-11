@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_required, current_user
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
+from werkzeug.security import generate_password_hash
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,51 @@ def index():
     """
     courses = Course.query.all()
     return render_template('index.html', courses=courses)
+
+@main.route('/add_user', methods=['POST'])
+@login_required
+def add_user():
+    """Добавление нового пользователя через админ-панель"""
+    if not current_user.is_admin:
+        flash('У вас нет доступа к этой функции', 'error')
+        return redirect(url_for('main.index'))
+
+    try:
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        is_admin = bool(request.form.get('is_admin'))
+
+        if not all([username, email, password]):
+            flash('Все поля обязательны для заполнения', 'error')
+            return redirect(url_for('admin.users'))
+
+        if User.query.filter_by(username=username).first():
+            flash('Пользователь с таким именем уже существует', 'error')
+            return redirect(url_for('admin.users'))
+
+        if User.query.filter_by(email=email).first():
+            flash('Пользователь с таким email уже существует', 'error')
+            return redirect(url_for('admin.users'))
+
+        new_user = User(
+            username=username,
+            email=email,
+            is_admin=is_admin
+        )
+        new_user.set_password(password)
+
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash('Пользователь успешно создан', 'success')
+        return redirect(url_for('admin.users'))
+
+    except Exception as e:
+        logger.error(f"Ошибка при создании пользователя: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при создании пользователя', 'error')
+        return redirect(url_for('admin.users'))
 
 @main.route('/add_course', methods=['POST'])
 @login_required
@@ -107,3 +153,23 @@ def notifications():
         logger.error(f"Ошибка при загрузке уведомлений: {str(e)}")
         flash('Произошла ошибка при загрузке уведомлений', 'error')
         return redirect(url_for('main.index'))
+
+@main.route('/delete_course/<int:course_id>', methods=['POST'])
+@login_required
+def delete_course(course_id):
+    """Удаление курса"""
+    if not current_user.is_admin:
+        flash('У вас нет доступа к этой функции', 'error')
+        return redirect(url_for('main.index'))
+
+    try:
+        course = Course.query.get_or_404(course_id)
+        db.session.delete(course)
+        db.session.commit()
+        flash('Курс успешно удален', 'success')
+    except Exception as e:
+        logger.error(f"Ошибка при удалении курса: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при удалении курса', 'error')
+
+    return redirect(url_for('admin.courses'))

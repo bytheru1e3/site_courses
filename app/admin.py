@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, flash, redirect, url_for
+from flask import Blueprint, render_template, flash, redirect, url_for, request
 from flask_login import login_required, current_user
 from app.models import User, Course, Material, MaterialFile
 from app import db
@@ -75,3 +75,39 @@ def files():
         logger.error(f"Ошибка при загрузке списка файлов: {str(e)}")
         flash('Ошибка при загрузке списка файлов', 'error')
         return redirect(url_for('admin.index'))
+
+@admin.route('/course/<int:course_id>/access', methods=['GET', 'POST'])
+@login_required
+def manage_course_access(course_id):
+    """Управление доступом к курсу"""
+    if not current_user.is_admin:
+        flash('У вас нет доступа к этой функции', 'error')
+        return redirect(url_for('main.index'))
+
+    try:
+        course = Course.query.get_or_404(course_id)
+        if request.method == 'POST':
+            user_id = request.form.get('user_id')
+            action = request.form.get('action')
+
+            user = User.query.get_or_404(user_id)
+
+            if action == 'grant':
+                if not user.has_access_to_course(course):
+                    course.allowed_users.append(user)
+                    db.session.commit()
+                    flash(f'Доступ предоставлен пользователю {user.username}', 'success')
+            elif action == 'revoke':
+                if user.has_access_to_course(course):
+                    course.allowed_users.remove(user)
+                    db.session.commit()
+                    flash(f'Доступ отозван у пользователя {user.username}', 'success')
+
+            return redirect(url_for('admin.manage_course_access', course_id=course_id))
+
+        users = User.query.all()
+        return render_template('admin/course_access.html', course=course, users=users)
+    except Exception as e:
+        logger.error(f"Ошибка при управлении доступом к курсу: {str(e)}")
+        flash('Произошла ошибка при управлении доступом', 'error')
+        return redirect(url_for('admin.courses'))
