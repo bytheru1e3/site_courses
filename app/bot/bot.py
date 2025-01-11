@@ -164,6 +164,7 @@ class CourseBot:
 
                 # Поиск релевантных материалов
                 await message.reply("🔍 Ищу ответ на ваш вопрос...")
+                search_results = FileProcessor.search_similar_documents(question, top_k=3)
 
                 # Создаем клавиатуру с кнопками
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -171,43 +172,31 @@ class CourseBot:
                     [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
                 ])
 
-                try:
-                    # Используем FileProcessor для поиска похожих документов
-                    vector_db_path = os.path.join(os.getcwd(), 'app', 'data', 'vector_store')
-                    search_results = FileProcessor.search_similar_documents(question, top_k=3)
-
-                    if not search_results:
-                        await message.reply(
-                            "К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
-                            "Попробуйте переформулировать вопрос или выбрать другой курс.",
-                            reply_markup=keyboard
-                        )
-                        return
-
-                    # Формируем структурированный ответ
-                    response = (
-                        f"📚 Результаты поиска по курсу «{course.title}»\n"
-                        f"❓ Ваш вопрос: {question}\n\n"
-                        "🔍 Найденная информация:\n"
-                    )
-
-                    for idx, result in enumerate(search_results, 1):
-                        text = result.get('text', '')
-                        # Ограничиваем длину текста для лучшей читаемости
-                        max_length = 300
-                        if len(text) > max_length:
-                            text = text[:max_length] + "..."
-                        response += f"\n{idx}. {text}\n"
-
-                    await message.reply(response, reply_markup=keyboard)
-                    logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
-
-                except Exception as e:
-                    logger.error(f"Error searching for answer: {e}")
+                if not search_results:
                     await message.reply(
-                        "❌ Произошла ошибка при поиске ответа на ваш вопрос",
+                        "К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
+                        "Попробуйте переформулировать вопрос или выбрать другой курс.",
                         reply_markup=keyboard
                     )
+                    return
+
+                # Формируем структурированный ответ
+                response = (
+                    f"📚 Результаты поиска по курсу «{course.title}»\n"
+                    f"❓ Ваш вопрос: {question}\n\n"
+                    "🔍 Найденная информация:\n"
+                )
+
+                for idx, result in enumerate(search_results, 1):
+                    text = result.get('text', '')
+                    # Ограничиваем длину текста для лучшей читаемости
+                    max_length = 300
+                    if len(text) > max_length:
+                        text = text[:max_length] + "..."
+                    response += f"\n{idx}. {text}\n"
+
+                await message.reply(response, reply_markup=keyboard)
+                logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
 
                 # Очищаем состояние пользователя
                 self.user_states.pop(user_id, None)
@@ -215,6 +204,7 @@ class CourseBot:
         except Exception as e:
             logger.error(f"Error processing question: {e}", exc_info=True)
             await message.reply("❌ Произошла ошибка при обработке вашего вопроса")
+            # Очищаем состояние пользователя в случае ошибки
             if user_id in locals():
                 self.user_states.pop(user_id, None)
 

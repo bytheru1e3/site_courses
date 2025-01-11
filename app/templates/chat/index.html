@@ -51,76 +51,76 @@
 
 <!-- JavaScript для обработки чата -->
 <script>
-document.getElementById('questionForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const courseId = document.getElementById('courseSelect').value;
-    const question = document.getElementById('questionInput').value;
-    
-    if (!courseId) {
-        alert('Пожалуйста, выберите курс');
-        return;
-    }
-    
-    if (!question.trim()) {
-        alert('Пожалуйста, введите вопрос');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/chat/ask', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-                'course_id': courseId,
-                'question': question
-            })
-        });
+    document.getElementById('questionForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
         
-        const data = await response.json();
+        const courseId = document.getElementById('courseSelect').value;
+        const question = document.getElementById('questionInput').value;
         
-        if (data.success) {
-            // Добавляем вопрос и ответ в историю чата
-            const chatHistory = document.getElementById('chatHistory');
-            
-            // Добавляем вопрос пользователя
-            const questionDiv = document.createElement('div');
-            questionDiv.className = 'mb-3';
-            questionDiv.innerHTML = `
-                <div class="d-flex justify-content-end">
-                    <div class="bg-primary text-white rounded p-2" style="max-width: 75%;">
-                        ${question}
-                    </div>
-                </div>
-            `;
-            chatHistory.appendChild(questionDiv);
-            
-            // Добавляем ответ ассистента
-            const answerDiv = document.createElement('div');
-            answerDiv.className = 'mb-3';
-            answerDiv.innerHTML = `
-                <div class="d-flex justify-content-start">
-                    <div class="bg-light rounded p-2" style="max-width: 75%;">
-                        ${data.answer}
-                    </div>
-                </div>
-            `;
-            chatHistory.appendChild(answerDiv);
-            
-            // Прокручиваем чат вниз
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-            
-            // Очищаем поле ввода
-            document.getElementById('questionInput').value = '';
-        } else {
-            alert(data.error || 'Произошла ошибка при обработке вопроса');
+        if (!courseId) {
+            alert('Пожалуйста, выберите курс');
+            return;
         }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Произошла ошибка при отправке вопроса');
-    }
-});
+        
+        if (!question.trim()) {
+            alert('Пожалуйста, введите вопрос');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/chat/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'course_id': courseId,
+                    'question': question
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Добавляем вопрос и ответ в историю чата
+                const chatHistory = document.getElementById('chatHistory');
+                
+                // Добавляем вопрос пользователя
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'mb-3';
+                questionDiv.innerHTML = `
+                    <div class="d-flex justify-content-end">
+                        <div class="bg-primary text-white rounded p-2" style="max-width: 75%;">
+                            ${question}
+                        </div>
+                    </div>
+                `;
+                chatHistory.appendChild(questionDiv);
+                
+                // Добавляем ответ ассистента
+                const answerDiv = document.createElement('div');
+                answerDiv.className = 'mb-3';
+                answerDiv.innerHTML = `
+                    <div class="d-flex justify-content-start">
+                        <div class="bg-light rounded p-2" style="max-width: 75%;">
+                            ${data.answer}
+                        </div>
+                    </div>
+                `;
+                chatHistory.appendChild(answerDiv);
+                
+                // Прокручиваем чат вниз
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+                
+                // Очищаем поле ввода
+                document.getElementById('questionInput').value = '';
+            } else {
+                alert(data.error || 'Произошла ошибка при обработке вопроса');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Произошла ошибка при отправке вопроса');
+        }
+    });
 </script>
 {% endblock %}

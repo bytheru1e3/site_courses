@@ -4,28 +4,20 @@ import faiss
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 import logging
+import pickle
 
 logger = logging.getLogger(__name__)
 
 class VectorDB:
-    def __init__(
-        self,
-        index_file="app/data/vector_index.faiss",
-        documents_file="app/data/documents.json"
-    ):
-        self.vectorizer = TfidfVectorizer(max_features=384)
-        self.index_file = index_file
-        self.documents_file = documents_file
-
-        # Создаем директорию для хранения файлов, если её нет
-        os.makedirs(os.path.dirname(index_file), exist_ok=True)
-
-        self.index = self._load_index()
-        self.documents = self._load_documents()
+    def __init__(self, index_path, documents_path):
+        self.index_path = index_path
+        self.documents_path = documents_path
+        self.documents = []
+        self.index = faiss.IndexFlatL2(384)  # Assuming 384 is the dimension of your embeddings
         self.is_vectorizer_fitted = False
+        self.vectorizer = TfidfVectorizer()
 
     def create_embedding(self, text):
-        """Создание векторного представления текста"""
         try:
             if not text or not isinstance(text, str):
                 logger.error("Получен невалидный текст для создания эмбеддинга")
@@ -58,10 +50,22 @@ class VectorDB:
                     logger.info(f"Документ {document_id} успешно добавлен в базу")
                     self.save()
                     return True
-            return False
         except Exception as e:
             logger.error(f"Ошибка при добавлении документа: {e}")
             return False
+
+    def save(self):
+        """Сохранение индекса и документов в файл"""
+        try:
+            with open(self.index_path, 'wb') as f:
+                faiss.write_index(self.index, f)
+            with open(self.documents_path, 'wb') as f:
+                pickle.dump(self.documents, f)
+            logger.info("Индекс и документы успешно сохранены")
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении индекса и документов: {e}")
+
+    # Other methods...
 
     def remove_document(self, document_id):
         """Удаление документа из индекса"""
@@ -114,14 +118,6 @@ class VectorDB:
         except Exception as e:
             logger.error(f"Ошибка при поиске: {e}")
             return []
-
-    def save(self):
-        """Сохранение индекса и документов"""
-        try:
-            self._save_index()
-            self._save_documents()
-        except Exception as e:
-            logger.error(f"Ошибка при сохранении базы: {e}")
 
     def _load_index(self):
         """Загрузка индекса"""

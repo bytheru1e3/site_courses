@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_from_directory
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
 import logging
@@ -8,7 +8,7 @@ import shutil
 from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
 from transliterate import translit
-from ai import answer_question
+from app.ai import answer_question
 
 logger = logging.getLogger(__name__)
 
@@ -53,21 +53,15 @@ def ask_question():
                 'error': 'Необходимо выбрать курс и задать вопрос'
             }), 400
 
-        # Проверяем существование курса
-        course = Course.query.get_or_404(course_id)
+        vector_db_path = "/Users/leonidstepanov/Desktop/Project/app/data/"  # Укажите путь к вашей векторной базе данных
 
-        # Получаем путь к векторной базе данных
-        vector_db_path = os.path.join(os.getcwd(), 'app', 'data', 'vector_store')
+        # Получаем ответ на вопрос
+        response = answer_question(question, vector_db_path)
 
-        # Получаем ответ через AI модуль
-        answer = answer_question(question, vector_db_path)
-
-        response = {
+        return jsonify({
             'success': True,
-            'answer': answer
-        }
-
-        return jsonify(response)
+            'answer': response
+        })
 
     except Exception as e:
         logger.error(f"Ошибка при обработке вопроса: {str(e)}")

@@ -1,5 +1,27 @@
 {pkgs}: {
   deps = [
+    pkgs.libyaml
+    pkgs.xcodebuild
+    pkgs.xsimd
+    pkgs.zlib
+    pkgs.tk
+    pkgs.tcl
+    pkgs.openjpeg
+    pkgs.libwebp
+    pkgs.libtiff
+    pkgs.libjpeg
+    pkgs.libimagequant
+    pkgs.lcms2
+    pkgs.freetype
+    pkgs.cacert
+    pkgs.which
+    pkgs.libpng
+    pkgs.libjpeg_turbo
+    pkgs.pkg-config
+    pkgs.rustc
+    pkgs.libiconv
+    pkgs.cargo
+    pkgs.libxcrypt
     pkgs.openssh
     pkgs.bash
     pkgs.glibcLocales

@@ -28,7 +28,16 @@ dependencies = [
     "python-telegram-bot>=21.10",
     "transliterate>=1.10.2",
     "requests>=2.32.3",
-    "langchain>=0.0.27",
     "docx>=0.2.4",
+    "langchain>=0.0.27",
     "langchain-core>=0.3.29",
 ]
+
+[[tool.uv.index]]
+explicit = true
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
