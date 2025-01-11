@@ -9,10 +9,17 @@ from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
 from transliterate import translit
 from app.services.ai_processor import AIProcessor
+from app.config import Config
 
 logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
+
+UPLOAD_FOLDER = Config.UPLOAD_FOLDER
+ALLOWED_EXTENSIONS = Config.ALLOWED_EXTENSIONS
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @main.route('/')
 def index():
@@ -338,14 +345,6 @@ def mark_notification_read(notification_id):
 def mark_all_notifications_read():
     """Отметка всех уведомлений как прочитанных"""
     return jsonify({'success': True})
-
-UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-ALLOWED_EXTENSIONS = {'docx', 'pdf'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @main.route('/admin/users/add', methods=['POST'])
 def add_user():

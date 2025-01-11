@@ -39,6 +39,7 @@ def create_app():
     # Создание таблиц базы данных
     with app.app_context():
         try:
+            from app.models import User, Course, Material, MaterialFile, Notification
             db.create_all()
             logger.info("Database tables created successfully")
         except Exception as e:
