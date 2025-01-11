@@ -1,6 +1,5 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
 import logging
 import os
 
@@ -10,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 # Инициализация расширений
 db = SQLAlchemy()
-login_manager = LoginManager()
 
 def create_app():
     app = Flask(__name__)
@@ -21,34 +19,25 @@ def create_app():
 
     # Инициализация расширений
     db.init_app(app)
-    login_manager.init_app(app)
-    login_manager.login_view = 'auth.login'
-
-    # Создание папок для загрузки файлов
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     # Регистрация блюпринтов
     from app.routes import main
     from app.admin import admin
     from app.api import api
+    from app.api.telegram import telegram_api  # Добавляем новый blueprint
 
     app.register_blueprint(main)
     app.register_blueprint(admin)
     app.register_blueprint(api)
+    app.register_blueprint(telegram_api)  # Регистрируем новый blueprint
 
     # Создание таблиц базы данных
     with app.app_context():
         try:
-            from app.models import User, Course, Material, MaterialFile, Notification
             db.create_all()
             logger.info("Database tables created successfully")
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")
-
-    # Инициализация загрузчика пользователей
-    @login_manager.user_loader
-    def load_user(user_id):
-        from app.models import User
-        return User.query.get(int(user_id))
+            db.session.rollback()
 
     return app

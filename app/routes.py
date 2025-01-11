@@ -8,18 +8,10 @@ import shutil
 from app.services.notification_service import NotificationService
 from werkzeug.utils import secure_filename
 from transliterate import translit
-from app.services.ai_processor import AIProcessor
-from app.config import Config
 
 logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
-
-UPLOAD_FOLDER = Config.UPLOAD_FOLDER
-ALLOWED_EXTENSIONS = Config.ALLOWED_EXTENSIONS
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @main.route('/')
 def index():
@@ -204,6 +196,7 @@ def delete_material(material_id):
 def upload_file(material_id):
     """Загрузка файла для материала"""
     try:
+        # Проверяем наличие файла в запросе
         if 'file' not in request.files:
             flash('Файл не выбран', 'error')
             return redirect(url_for('main.material', material_id=material_id))
@@ -213,16 +206,14 @@ def upload_file(material_id):
             flash('Файл не выбран', 'error')
             return redirect(url_for('main.material', material_id=material_id))
 
-        material = Material.query.get_or_404(material_id)
-        course_id = material.course_id
-
-        if not allowed_file(file.filename):
+        original_filename = file.filename
+        if not allowed_file(original_filename):
             flash(f'Недопустимый тип файла. Разрешены только: {", ".join(ALLOWED_EXTENSIONS)}', 'error')
             return redirect(url_for('main.material', material_id=material_id))
 
         try:
             # Транслитерация имени файла и безопасное сохранение
-            filename_no_ext, file_ext = os.path.splitext(file.filename)
+            filename_no_ext, file_ext = os.path.splitext(original_filename)
             transliterated_filename = translit(filename_no_ext, 'ru', reversed=True)
             safe_filename = secure_filename(transliterated_filename + file_ext)
 
@@ -235,13 +226,13 @@ def upload_file(material_id):
 
             # Сохраняем файл
             file.save(file_path)
-            logger.info(f"Файл {file.filename} успешно сохранен как {safe_filename}")
+            logger.info(f"Файл {original_filename} успешно сохранен как {safe_filename} в {file_path}")
 
             # Создаем запись в базе данных
             material_file = MaterialFile(
                 material_id=material_id,
-                filename=file.filename,
-                file_path=os.path.join(str(material_id), safe_filename),
+                filename=original_filename,  # Сохраняем оригинальное имя для отображения
+                file_path=os.path.join(str(material_id), safe_filename),  # Относительный путь для хранения
                 file_type=file_ext.lower()[1:],
                 is_indexed=False
             )
@@ -249,16 +240,33 @@ def upload_file(material_id):
             db.session.add(material_file)
             db.session.commit()
 
-            # Добавляем файл в векторную базу
-            ai_processor = AIProcessor.get_instance()
-            if ai_processor.add_file_to_vector_db(file_path, course_id):
-                material_file.is_indexed = True
-                db.session.commit()
-                flash('Файл успешно загружен и проиндексирован', 'success')
-                logger.info(f"Файл {file.filename} успешно проиндексирован")
-            else:
+            # Обрабатываем и индексируем файл
+            try:
+                vector = FileProcessor.process_file(file_path)
+
+                if vector is not None:
+                    material_file.set_vector(vector)
+                    material_file.is_indexed = True
+                    db.session.commit()
+
+                    flash('Файл успешно загружен и проиндексирован', 'success')
+                    logger.info(f"Файл {original_filename} успешно проиндексирован")
+
+                    # Добавляем уведомление об успешной загрузке
+                    notification = Notification(
+                        user_id=1,  # TODO: Replace with current_user.id when auth is implemented
+                        title='Файл обработан',
+                        message=f'Файл {original_filename} успешно загружен и проиндексирован',
+                        type='success'
+                    )
+                    db.session.add(notification)
+                    db.session.commit()
+                else:
+                    flash('Файл загружен, но возникла ошибка при индексации', 'warning')
+                    logger.error(f"Не удалось создать векторное представление для файла {original_filename}")
+            except Exception as e:
+                logger.error(f"Ошибка при индексации файла: {str(e)}")
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
-                logger.error(f"Не удалось проиндексировать файл {file.filename}")
 
         except Exception as e:
             logger.error(f"Ошибка при сохранении файла: {str(e)}")
@@ -345,6 +353,14 @@ def mark_notification_read(notification_id):
 def mark_all_notifications_read():
     """Отметка всех уведомлений как прочитанных"""
     return jsonify({'success': True})
+
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {'docx', 'pdf'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @main.route('/admin/users/add', methods=['POST'])
 def add_user():
