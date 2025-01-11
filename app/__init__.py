@@ -20,24 +20,20 @@ def create_app():
     # Инициализация расширений
     db.init_app(app)
 
-    # Регистрация блюпринтов
-    from app.routes import main
-    from app.admin import admin
-    from app.api import api
-    from app.api.telegram import telegram_api  # Добавляем новый blueprint
-
-    app.register_blueprint(main)
-    app.register_blueprint(admin)
-    app.register_blueprint(api)
-    app.register_blueprint(telegram_api)  # Регистрируем новый blueprint
-
-    # Создание таблиц базы данных
     with app.app_context():
+        # Импорт моделей для создания таблиц
+        from app.models import User, Course, Material, MaterialFile, Notification
+
+        # Создание таблиц базы данных
         try:
             db.create_all()
             logger.info("Database tables created successfully")
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")
             db.session.rollback()
+
+        # Регистрация блюпринтов
+        from app.routes import main
+        app.register_blueprint(main)
 
     return app

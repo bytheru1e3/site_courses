@@ -26,7 +26,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
-    telegram_id = db.Column(db.String(32), unique=True, nullable=True, index=True)  # Added telegram_id field
+    telegram_id = db.Column(db.String(32), unique=True, nullable=True, index=True)
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
