@@ -30,3 +30,6 @@ class Config:
     # Upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'uploads')
+    
+    # Vector DB path
+    VECTOR_DB_PATH = os.path.join(os.getcwd(), 'app', 'data', 'vector_store')

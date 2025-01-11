@@ -17,27 +17,33 @@ def create_app():
     from app.config import Config
     app.config.from_object(Config)
 
+    # Создаем необходимые директории
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['VECTOR_DB_PATH'], exist_ok=True)
+
     # Инициализация расширений
     db.init_app(app)
 
     # Регистрация блюпринтов
     from app.routes import main
-    from app.admin import admin
-    from app.api import api
-    from app.api.telegram import telegram_api  # Добавляем новый blueprint
-
     app.register_blueprint(main)
+    from app.admin import admin
     app.register_blueprint(admin)
+    from app.api import api
     app.register_blueprint(api)
-    app.register_blueprint(telegram_api)  # Регистрируем новый blueprint
+    from app.api.telegram import telegram_api
+    app.register_blueprint(telegram_api)
+
 
     # Создание таблиц базы данных
     with app.app_context():
         try:
+            # Import models here to ensure they are registered with SQLAlchemy
+            from app.models import User, Course, Material, MaterialFile, Notification
             db.create_all()
             logger.info("Database tables created successfully")
         except Exception as e:
             logger.error(f"Error during database initialization: {e}")
-            db.session.rollback()
+            raise
 
     return app
