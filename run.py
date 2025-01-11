@@ -1,6 +1,5 @@
-import os
-import logging
 from app import create_app
+import logging
 
 # Настройка логирования
 logging.basicConfig(
@@ -9,23 +8,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def main():
-    """Основная функция запуска приложения"""
-    try:
-        # Создаем Flask приложение
-        app = create_app()
-        logger.info("Flask application created successfully")
-        return app
-
-    except Exception as e:
-        logger.error(f"Failed to start application: {e}")
-        raise
+app = create_app()
 
 if __name__ == '__main__':
     try:
-        app = main()
         app.run(host='0.0.0.0', port=5000, debug=True)
-    except KeyboardInterrupt:
-        logger.info("Application stopped by user")
     except Exception as e:
         logger.error(f"Application crashed: {e}")

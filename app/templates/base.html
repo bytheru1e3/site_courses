@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Система управления документами</title>
+    <title>Панель администратора курсов</title>
     <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
 </head>
@@ -11,7 +11,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
-                <i class="bi bi-file-text me-2"></i>Документы
+                <i class="bi bi-mortarboard-fill me-2"></i>Курсы
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -24,6 +24,40 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.chat') }}">
                             <i class="bi bi-chat-dots me-1"></i>Чат
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-gear me-1"></i>Управление
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('admin.index') }}">
+                                    <i class="bi bi-speedometer2 me-2"></i>Панель управления
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('admin.users') }}">
+                                    <i class="bi bi-people me-2"></i>Пользователи
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('admin.courses') }}">
+                                    <i class="bi bi-book me-2"></i>Курсы
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('admin.files') }}">
+                                    <i class="bi bi-files me-2"></i>Файлы
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.notifications') }}">
+                            <i class="bi bi-bell me-1"></i>Уведомления
                         </a>
                     </li>
                 </ul>
