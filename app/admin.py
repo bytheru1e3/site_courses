@@ -1,5 +1,4 @@
 from flask import Blueprint, render_template, flash, redirect, url_for, request
-from flask_login import login_required, current_user
 from app.models import User, Course, Material, MaterialFile
 from app import db
 import logging
@@ -8,13 +7,8 @@ logger = logging.getLogger(__name__)
 admin = Blueprint('admin', __name__, url_prefix='/admin')
 
 @admin.route('/')
-@login_required
 def index():
     """Главная страница административной панели"""
-    if not current_user.is_admin:
-        flash('У вас нет доступа к административной панели', 'error')
-        return redirect(url_for('main.index'))
-
     try:
         stats = {
             'users_count': User.query.count(),
@@ -29,13 +23,8 @@ def index():
         return redirect(url_for('main.index'))
 
 @admin.route('/users')
-@login_required
 def users():
     """Список всех пользователей"""
-    if not current_user.is_admin:
-        flash('У вас нет доступа к административной панели', 'error')
-        return redirect(url_for('main.index'))
-
     try:
         users = User.query.order_by(User.created_at.desc()).all()
         return render_template('admin/users.html', users=users)
@@ -45,13 +34,8 @@ def users():
         return redirect(url_for('admin.index'))
 
 @admin.route('/courses')
-@login_required
 def courses():
     """Список всех курсов"""
-    if not current_user.is_admin:
-        flash('У вас нет доступа к административной панели', 'error')
-        return redirect(url_for('main.index'))
-
     try:
         courses = Course.query.order_by(Course.created_at.desc()).all()
         return render_template('admin/courses.html', courses=courses)
@@ -61,13 +45,8 @@ def courses():
         return redirect(url_for('admin.index'))
 
 @admin.route('/files')
-@login_required
 def files():
     """Список всех файлов"""
-    if not current_user.is_admin:
-        flash('У вас нет доступа к административной панели', 'error')
-        return redirect(url_for('main.index'))
-
     try:
         files = MaterialFile.query.order_by(MaterialFile.uploaded_at.desc()).all()
         return render_template('admin/files.html', files=files)
@@ -77,13 +56,8 @@ def files():
         return redirect(url_for('admin.index'))
 
 @admin.route('/course/<int:course_id>/access', methods=['GET', 'POST'])
-@login_required
 def manage_course_access(course_id):
     """Управление доступом к курсу"""
-    if not current_user.is_admin:
-        flash('У вас нет доступа к этой функции', 'error')
-        return redirect(url_for('main.index'))
-
     try:
         course = Course.query.get_or_404(course_id)
         if request.method == 'POST':
