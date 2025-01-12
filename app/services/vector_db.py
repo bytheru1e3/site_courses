@@ -12,16 +12,43 @@ class VectorDB:
     def __init__(self, index_path, documents_path):
         self.index_path = index_path
         self.documents_path = documents_path
+
+        # Создаем директории если они не существуют
+        os.makedirs(os.path.dirname(index_path), exist_ok=True)
+        os.makedirs(os.path.dirname(documents_path), exist_ok=True)
+
         self.documents = []
-        self.index = faiss.IndexFlatL2(384)  # Assuming 384 is the dimension of your embeddings
+        self.index = None
+        self.load()
+
+        if self.index is None:
+            self.index = faiss.IndexFlatL2(384)  # Размерность для модели sentence-transformers
+
         self.is_vectorizer_fitted = False
         self.vectorizer = TfidfVectorizer()
+
+    def load(self):
+        """Загрузка индекса и документов"""
+        try:
+            if os.path.exists(self.index_path):
+                with open(self.index_path, 'rb') as f:
+                    self.index = faiss.read_index(f)
+                logger.info("Индекс успешно загружен")
+
+            if os.path.exists(self.documents_path):
+                with open(self.documents_path, 'rb') as f:
+                    self.documents = pickle.load(f)
+                logger.info("Документы успешно загружены")
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке базы данных: {e}")
+            self.index = None
+            self.documents = []
 
     def create_embedding(self, text):
         try:
             if not text or not isinstance(text, str):
                 logger.error("Получен невалидный текст для создания эмбеддинга")
-                return np.zeros(384).tolist()
+                return np.zeros(384).astype('float32')
 
             if not self.is_vectorizer_fitted:
                 vectors = self.vectorizer.fit_transform([text])
@@ -29,11 +56,17 @@ class VectorDB:
             else:
                 vectors = self.vectorizer.transform([text])
 
+            # Нормализуем вектор к нужной размерности
             embedding = vectors.toarray()[0]
-            return embedding.tolist()
+            if len(embedding) > 384:
+                embedding = embedding[:384]
+            elif len(embedding) < 384:
+                embedding = np.pad(embedding, (0, 384 - len(embedding)))
+
+            return embedding.astype('float32')
         except Exception as e:
             logger.error(f"Ошибка при создании эмбеддинга: {e}")
-            return np.zeros(384).tolist()
+            return np.zeros(384).astype('float32')
 
     def add_document(self, text, document_id):
         """Добавление документа в индекс"""
@@ -45,27 +78,54 @@ class VectorDB:
                         'text': text
                     })
                     embedding = self.create_embedding(text)
-                    embedding_array = np.array([embedding]).astype('float32')
+                    embedding_array = np.array([embedding])
                     self.index.add(embedding_array)
                     logger.info(f"Документ {document_id} успешно добавлен в базу")
                     self.save()
                     return True
+                else:
+                    logger.warning(f"Документ {document_id} уже существует в базе")
+            return False
         except Exception as e:
             logger.error(f"Ошибка при добавлении документа: {e}")
             return False
 
     def save(self):
-        """Сохранение индекса и документов в файл"""
+        """Сохранение индекса и документов"""
         try:
             with open(self.index_path, 'wb') as f:
                 faiss.write_index(self.index, f)
             with open(self.documents_path, 'wb') as f:
                 pickle.dump(self.documents, f)
-            logger.info("Индекс и документы успешно сохранены")
+            logger.info("База данных успешно сохранена")
+            return True
         except Exception as e:
-            logger.error(f"Ошибка при сохранении индекса и документов: {e}")
+            logger.error(f"Ошибка при сохранении базы данных: {e}")
+            return False
 
-    # Other methods...
+    def search(self, query, top_k=3):
+        """Поиск похожих документов"""
+        try:
+            if not query or not isinstance(query, str):
+                return []
+
+            query_embedding = self.create_embedding(query)
+            query_embedding = np.array([query_embedding])
+
+            if self.index.ntotal == 0:
+                logger.warning("База данных пуста")
+                return []
+
+            distances, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
+
+            results = []
+            for idx in indices[0]:
+                if idx >= 0 and idx < len(self.documents):
+                    results.append(self.documents[idx])
+            return results
+        except Exception as e:
+            logger.error(f"Ошибка при поиске: {e}")
+            return []
 
     def remove_document(self, document_id):
         """Удаление документа из индекса"""
@@ -100,63 +160,3 @@ class VectorDB:
         except Exception as e:
             logger.error(f"Ошибка при удалении документа: {e}")
             return False
-
-    def search(self, query, top_k=3):
-        """Поиск похожих документов"""
-        try:
-            if not query or not isinstance(query, str):
-                return []
-
-            query_embedding = self.create_embedding(query)
-            query_embedding = np.array([query_embedding]).astype('float32')
-            distances, indices = self.index.search(query_embedding, top_k)
-            results = []
-            for idx in indices[0]:
-                if idx < len(self.documents):
-                    results.append(self.documents[idx])
-            return results
-        except Exception as e:
-            logger.error(f"Ошибка при поиске: {e}")
-            return []
-
-    def _load_index(self):
-        """Загрузка индекса"""
-        try:
-            if os.path.exists(self.index_file):
-                logger.info(f"Загрузка индекса из файла: {self.index_file}")
-                return faiss.read_index(self.index_file)
-            logger.info("Создание нового индекса")
-            return faiss.IndexFlatL2(384)
-        except Exception as e:
-            logger.error(f"Ошибка при загрузке индекса: {e}")
-            return faiss.IndexFlatL2(384)
-
-    def _save_index(self):
-        """Сохранение индекса"""
-        try:
-            faiss.write_index(self.index, self.index_file)
-            logger.info(f"Индекс сохранён в файл: {self.index_file}")
-        except Exception as e:
-            logger.error(f"Ошибка при сохранении индекса: {e}")
-
-    def _load_documents(self):
-        """Загрузка документов"""
-        try:
-            if os.path.exists(self.documents_file):
-                logger.info(f"Загрузка документов из файла: {self.documents_file}")
-                with open(self.documents_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            logger.info("Создание нового списка документов")
-            return []
-        except Exception as e:
-            logger.error(f"Ошибка при загрузке документов: {e}")
-            return []
-
-    def _save_documents(self):
-        """Сохранение документов"""
-        try:
-            with open(self.documents_file, "w", encoding="utf-8") as f:
-                json.dump(self.documents, f, ensure_ascii=False, indent=4)
-            logger.info(f"Документы сохранены в файл: {self.documents_file}")
-        except Exception as e:
-            logger.error(f"Ошибка при сохранении документов: {e}")
