@@ -10,7 +10,7 @@
             <p class="text-muted">{{ course.description }}</p>
         </div>
         <div class="col text-end">
-            <a href="{{ url_for('main.manage_course_access', course_id=course.id) }}" class="btn btn-outline-primary">
+            <a href="{{ url_for('admin.manage_course_access', course_id=course.id) }}" class="btn btn-outline-primary">
                 <i class="bi bi-people me-2"></i>Управление доступом
             </a>
         </div>
