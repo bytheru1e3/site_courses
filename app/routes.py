@@ -246,6 +246,13 @@ def upload_file(material_id):
 
         if file:
             filename = secure_filename(file.filename)
+            # Определяем тип файла по расширению
+            file_type = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+
+            if file_type not in ['pdf', 'docx']:
+                flash('Неподдерживаемый тип файла. Разрешены только PDF и DOCX', 'error')
+                return redirect(url_for('main.course', course_id=material.course_id))
+
             # Создаем директорию для файлов материала если её нет
             file_dir = os.path.join(os.getcwd(), 'app', 'uploads', str(material_id))
             os.makedirs(file_dir, exist_ok=True)
@@ -257,17 +264,21 @@ def upload_file(material_id):
             material_file = MaterialFile(
                 filename=filename,
                 file_path=file_path,
-                material=material
+                file_type=file_type,
+                material=material,
+                is_indexed=False
             )
             db.session.add(material_file)
             db.session.commit()
 
-            # Добавляем файл в векторную БД (Предполагается, что функция существует)
-            from app.ai import add_file_to_vector_db #Import add_file_to_vector_db
+            # Добавляем файл в векторную БД
+            from app.ai import add_file_to_vector_db
             vector_db_path = os.path.join(os.getcwd(), "app", "data")
             success = add_file_to_vector_db(file_path, vector_db_path)
 
             if success:
+                material_file.is_indexed = True
+                db.session.commit()
                 flash('Файл успешно загружен и обработан', 'success')
             else:
                 flash('Файл загружен, но возникла ошибка при обработке', 'warning')
