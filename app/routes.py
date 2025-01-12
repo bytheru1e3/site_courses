@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_file
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
 import logging
 import os
+from werkzeug.utils import secure_filename #Import secure_filename
 
 logger = logging.getLogger(__name__)
 
@@ -227,3 +228,88 @@ def delete_course(course_id):
         flash('Произошла ошибка при удалении курса', 'error')
 
     return redirect(url_for('admin.courses'))
+
+
+@main.route('/material/<int:material_id>/upload_file', methods=['POST'])
+def upload_file(material_id):
+    """Загрузка файла к материалу с добавлением в векторную БД"""
+    try:
+        material = Material.query.get_or_404(material_id)
+        if 'file' not in request.files:
+            flash('Файл не выбран', 'error')
+            return redirect(url_for('main.course', course_id=material.course_id))
+
+        file = request.files['file']
+        if file.filename == '':
+            flash('Файл не выбран', 'error')
+            return redirect(url_for('main.course', course_id=material.course_id))
+
+        if file:
+            filename = secure_filename(file.filename)
+            # Создаем директорию для файлов материала если её нет
+            file_dir = os.path.join(os.getcwd(), 'app', 'uploads', str(material_id))
+            os.makedirs(file_dir, exist_ok=True)
+
+            file_path = os.path.join(file_dir, filename)
+            file.save(file_path)
+
+            # Создаем запись о файле в БД
+            material_file = MaterialFile(
+                filename=filename,
+                file_path=file_path,
+                material=material
+            )
+            db.session.add(material_file)
+            db.session.commit()
+
+            # Добавляем файл в векторную БД (Предполагается, что функция существует)
+            from app.ai import add_file_to_vector_db #Import add_file_to_vector_db
+            vector_db_path = os.path.join(os.getcwd(), "app", "data")
+            success = add_file_to_vector_db(file_path, vector_db_path)
+
+            if success:
+                flash('Файл успешно загружен и обработан', 'success')
+            else:
+                flash('Файл загружен, но возникла ошибка при обработке', 'warning')
+
+            return redirect(url_for('main.course', course_id=material.course_id))
+
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке файла: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при загрузке файла', 'error')
+        return redirect(url_for('main.course', course_id=material.course_id))
+
+@main.route('/file/<int:file_id>/download')
+def download_file(file_id):
+    """Скачивание файла"""
+    try:
+        file = MaterialFile.query.get_or_404(file_id)
+        return send_file(file.file_path, as_attachment=True)
+    except Exception as e:
+        logger.error(f"Ошибка при скачивании файла: {str(e)}")
+        flash('Произошла ошибка при скачивании файла', 'error')
+        return redirect(url_for('main.course', course_id=file.material.course_id))
+
+@main.route('/file/<int:file_id>/delete', methods=['POST'])
+def delete_file(file_id):
+    """Удаление файла"""
+    try:
+        file = MaterialFile.query.get_or_404(file_id)
+        course_id = file.material.course_id
+
+        # Удаляем физический файл
+        if os.path.exists(file.file_path):
+            os.remove(file.file_path)
+
+        db.session.delete(file)
+        db.session.commit()
+
+        flash('Файл успешно удален', 'success')
+        return redirect(url_for('main.course', course_id=course_id))
+
+    except Exception as e:
+        logger.error(f"Ошибка при удалении файла: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при удалении файла', 'error')
+        return redirect(url_for('main.course', course_id=file.material.course_id))
