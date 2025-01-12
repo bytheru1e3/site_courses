@@ -89,6 +89,78 @@ def course(course_id):
     course = Course.query.get_or_404(course_id)
     return render_template('course/view.html', course=course)
 
+@main.route('/course/<int:course_id>/add_material', methods=['POST'])
+def add_material(course_id):
+    """Добавление материала к курсу"""
+    try:
+        course = Course.query.get_or_404(course_id)
+        title = request.form.get('title')
+        content = request.form.get('content', '')
+
+        if not title:
+            flash('Название материала обязательно', 'error')
+            return redirect(url_for('main.course', course_id=course_id))
+
+        material = Material(
+            title=title,
+            content=content,
+            course=course
+        )
+        db.session.add(material)
+        db.session.commit()
+
+        flash('Материал успешно добавлен', 'success')
+        return redirect(url_for('main.course', course_id=course_id))
+
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении материала: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при добавлении материала', 'error')
+        return redirect(url_for('main.course', course_id=course_id))
+
+@main.route('/material/<int:material_id>/edit', methods=['POST'])
+def edit_material(material_id):
+    """Редактирование материала"""
+    try:
+        material = Material.query.get_or_404(material_id)
+        title = request.form.get('title')
+        content = request.form.get('content', '')
+
+        if not title:
+            flash('Название материала обязательно', 'error')
+            return redirect(url_for('main.course', course_id=material.course_id))
+
+        material.title = title
+        material.content = content
+        db.session.commit()
+
+        flash('Материал успешно обновлен', 'success')
+        return redirect(url_for('main.course', course_id=material.course_id))
+
+    except Exception as e:
+        logger.error(f"Ошибка при редактировании материала: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при редактировании материала', 'error')
+        return redirect(url_for('main.course', course_id=material.course_id))
+
+@main.route('/material/<int:material_id>/delete', methods=['POST'])
+def delete_material(material_id):
+    """Удаление материала"""
+    try:
+        material = Material.query.get_or_404(material_id)
+        course_id = material.course_id
+        db.session.delete(material)
+        db.session.commit()
+
+        flash('Материал успешно удален', 'success')
+        return redirect(url_for('main.course', course_id=course_id))
+
+    except Exception as e:
+        logger.error(f"Ошибка при удалении материала: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при удалении материала', 'error')
+        return redirect(url_for('main.course', course_id=material.course_id))
+
 @main.route('/chat')
 def chat():
     """Страница чата с ИИ"""
