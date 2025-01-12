@@ -61,7 +61,7 @@ def add_course():
     """Добавление нового курса"""
     try:
         title = request.form.get('title')
-        description = request.form.get('description')
+        description = request.form.get('description', '')
 
         if not title:
             flash('Название курса обязательно', 'error')
