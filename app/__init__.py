@@ -16,8 +16,9 @@ def create_app():
     app = Flask(__name__)
 
     # Загрузка конфигурации
-    from app.config import Config
-    app.config.from_object(Config)
+    app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "your-secret-key")
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     # Инициализация расширений
     db.init_app(app)
@@ -49,5 +50,22 @@ def create_app():
         @login_manager.user_loader
         def load_user(user_id):
             return User.query.get(int(user_id))
+
+        # Создание администратора по умолчанию
+        try:
+            admin_exists = User.query.filter_by(username="admin").first()
+            if not admin_exists:
+                admin_user = User(
+                    username="admin",
+                    email="admin@example.com",
+                    is_admin=True
+                )
+                admin_user.set_password("admin")
+                db.session.add(admin_user)
+                db.session.commit()
+                logger.info("Default admin user created")
+        except Exception as e:
+            logger.error(f"Error creating default admin: {e}")
+            db.session.rollback()
 
     return app
