@@ -1,8 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
-from flask_login import login_required, current_user
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
-from werkzeug.security import generate_password_hash
 import logging
 import os
 
@@ -19,13 +17,8 @@ def index():
     return render_template('index.html', courses=courses)
 
 @main.route('/add_user', methods=['POST'])
-@login_required
 def add_user():
     """Добавление нового пользователя через админ-панель"""
-    if not current_user.is_admin:
-        flash('У вас нет доступа к этой функции', 'error')
-        return redirect(url_for('main.index'))
-
     try:
         username = request.form.get('username')
         email = request.form.get('email')
@@ -64,7 +57,6 @@ def add_user():
         return redirect(url_for('admin.users'))
 
 @main.route('/add_course', methods=['POST'])
-@login_required
 def add_course():
     """Добавление нового курса"""
     try:
@@ -77,8 +69,7 @@ def add_course():
 
         new_course = Course(
             title=title,
-            description=description,
-            user_id=current_user.id
+            description=description
         )
         db.session.add(new_course)
         db.session.commit()
@@ -93,14 +84,12 @@ def add_course():
         return redirect(url_for('main.index'))
 
 @main.route('/course/<int:course_id>')
-@login_required
 def course(course_id):
     """Просмотр курса"""
     course = Course.query.get_or_404(course_id)
     return render_template('course/view.html', course=course)
 
 @main.route('/chat')
-@login_required
 def chat():
     """Страница чата с ИИ"""
     try:
@@ -112,7 +101,6 @@ def chat():
         return redirect(url_for('main.index'))
 
 @main.route('/chat/ask', methods=['POST'])
-@login_required
 def ask_question():
     """Обработка вопроса к ИИ"""
     try:
@@ -141,12 +129,10 @@ def ask_question():
         }), 500
 
 @main.route('/notifications')
-@login_required
 def notifications():
-    """Страница уведомлений пользователя"""
+    """Страница уведомлений"""
     try:
         notifications = Notification.query.filter_by(
-            user_id=current_user.id,
             is_deleted=False
         ).order_by(Notification.created_at.desc()).all()
         return render_template('notifications.html', notifications=notifications)
@@ -156,13 +142,8 @@ def notifications():
         return redirect(url_for('main.index'))
 
 @main.route('/delete_course/<int:course_id>', methods=['POST'])
-@login_required
 def delete_course(course_id):
     """Удаление курса"""
-    if not current_user.is_admin:
-        flash('У вас нет доступа к этой функции', 'error')
-        return redirect(url_for('main.index'))
-
     try:
         course = Course.query.get_or_404(course_id)
         db.session.delete(course)
