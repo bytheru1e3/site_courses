@@ -4,6 +4,7 @@ from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
 from werkzeug.security import generate_password_hash
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ def ask_question():
                 'error': 'Необходимо задать вопрос'
             }), 400
 
-        vector_db_path = "app/data"
+        vector_db_path = os.path.join(os.getcwd(), "app", "data")
         from app.ai import answer_question
         response = answer_question(question, vector_db_path)
 
