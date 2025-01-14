@@ -15,6 +15,7 @@ class VectorDB:
         self.index_path = index_path
         self.documents_path = documents_path
         self.model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
+        self.embedding_dim = 768  # Размерность для модели paraphrase-multilingual-mpnet-base-v2
 
         # Создаем директории если они не существуют
         os.makedirs(os.path.dirname(index_path), exist_ok=True)
@@ -25,8 +26,8 @@ class VectorDB:
         self.load()
 
         if self.index is None:
-            self.index = faiss.IndexFlatL2(384)  # Размерность для модели sentence-transformers
-            logger.info("Created new FAISS index")
+            self.index = faiss.IndexFlatL2(self.embedding_dim)
+            logger.info(f"Created new FAISS index with dimension {self.embedding_dim}")
 
     def load(self):
         """Загрузка индекса и документов"""
@@ -88,8 +89,8 @@ class VectorDB:
                     return False
 
                 # Проверяем размерность эмбеддинга
-                if embedding.shape[0] != 384:
-                    logger.error(f"Неверная размерность эмбеддинга: {embedding.shape[0]}, ожидается 384")
+                if embedding.shape[0] != self.embedding_dim:
+                    logger.error(f"Неверная размерность эмбеддинга: {embedding.shape[0]}, ожидается {self.embedding_dim}")
                     return False
 
                 # Добавляем документ в список
@@ -199,7 +200,7 @@ class VectorDB:
                 self.documents.pop(doc_idx)
 
                 # Создаем новый индекс
-                new_index = faiss.IndexFlatL2(384)
+                new_index = faiss.IndexFlatL2(self.embedding_dim)
 
                 # Переиндексируем оставшиеся документы
                 for doc in self.documents:
