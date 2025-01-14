@@ -6,6 +6,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 import logging
 from sentence_transformers import SentenceTransformer
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +32,27 @@ class VectorDB:
         """Загрузка индекса и документов"""
         try:
             if os.path.exists(self.index_path):
-                self.index = faiss.read_index(self.index_path)
-                logger.info("Индекс успешно загружен")
+                try:
+                    self.index = faiss.read_index(self.index_path)
+                    logger.info("Индекс успешно загружен")
+                except Exception as e:
+                    logger.error(f"Ошибка при чтении индекса: {str(e)}")
+                    self.index = None
             else:
                 logger.warning(f"Индекс не найден по пути: {self.index_path}")
 
             if os.path.exists(self.documents_path):
-                with open(self.documents_path, 'rb') as f:
-                    self.documents = pickle.load(f)
-                logger.info(f"Документы успешно загружены, количество: {len(self.documents)}")
+                try:
+                    with open(self.documents_path, 'rb') as f:
+                        self.documents = pickle.load(f)
+                    logger.info(f"Документы успешно загружены, количество: {len(self.documents)}")
+                except Exception as e:
+                    logger.error(f"Ошибка при чтении документов: {str(e)}")
+                    self.documents = []
             else:
                 logger.warning(f"Файл документов не найден по пути: {self.documents_path}")
         except Exception as e:
-            logger.error(f"Ошибка при загрузке базы данных: {e}")
+            logger.error(f"Ошибка при загрузке базы данных: {e}\n{traceback.format_exc()}")
             self.index = None
             self.documents = []
 
@@ -52,14 +61,14 @@ class VectorDB:
         try:
             if not text or not isinstance(text, str):
                 logger.error("Получен невалидный текст для создания эмбеддинга")
-                return np.zeros(384).astype('float32')
+                return None
 
             # Используем sentence-transformers для создания эмбеддинга
             embedding = self.model.encode([text])[0]
             return embedding.astype('float32')
         except Exception as e:
-            logger.error(f"Ошибка при создании эмбеддинга: {e}")
-            return np.zeros(384).astype('float32')
+            logger.error(f"Ошибка при создании эмбеддинга: {e}\n{traceback.format_exc()}")
+            return None
 
     def add_document(self, text, document_id):
         """Добавление документа в индекс"""
@@ -78,41 +87,65 @@ class VectorDB:
                     logger.error(f"Не удалось создать эмбеддинг для документа {document_id}")
                     return False
 
+                # Проверяем размерность эмбеддинга
+                if embedding.shape[0] != 384:
+                    logger.error(f"Неверная размерность эмбеддинга: {embedding.shape[0]}, ожидается 384")
+                    return False
+
                 # Добавляем документ в список
                 self.documents.append({
                     'id': document_id,
                     'text': text
                 })
 
-                # Добавляем эмбеддинг в индекс
-                embedding_array = np.array([embedding])
-                self.index.add(embedding_array)
+                try:
+                    # Добавляем эмбеддинг в индекс
+                    embedding_array = np.array([embedding])
+                    self.index.add(embedding_array)
+                except Exception as e:
+                    logger.error(f"Ошибка при добавлении эмбеддинга в индекс: {e}\n{traceback.format_exc()}")
+                    # Удаляем документ из списка, так как не удалось добавить в индекс
+                    self.documents.pop()
+                    return False
 
                 # Сохраняем изменения
-                self.save()
+                if not self.save():
+                    # Если не удалось сохранить, откатываем изменения
+                    self.documents.pop()
+                    return False
+
                 logger.info(f"Документ {document_id} успешно добавлен в базу")
                 return True
             else:
                 logger.warning(f"Документ {document_id} уже существует в базе")
             return False
         except Exception as e:
-            logger.error(f"Ошибка при добавлении документа: {e}")
+            logger.error(f"Ошибка при добавлении документа: {e}\n{traceback.format_exc()}")
             return False
 
     def save(self):
         """Сохранение индекса и документов"""
         try:
             # Сохраняем индекс
-            faiss.write_index(self.index, self.index_path)
-            logger.info(f"Индекс сохранен в {self.index_path}")
+            try:
+                faiss.write_index(self.index, self.index_path)
+                logger.info(f"Индекс сохранен в {self.index_path}")
+            except Exception as e:
+                logger.error(f"Ошибка при сохранении индекса: {e}\n{traceback.format_exc()}")
+                return False
 
             # Сохраняем документы
-            with open(self.documents_path, 'wb') as f:
-                pickle.dump(self.documents, f)
-            logger.info(f"Документы сохранены в {self.documents_path}")
+            try:
+                with open(self.documents_path, 'wb') as f:
+                    pickle.dump(self.documents, f)
+                logger.info(f"Документы сохранены в {self.documents_path}")
+            except Exception as e:
+                logger.error(f"Ошибка при сохранении документов: {e}\n{traceback.format_exc()}")
+                return False
+
             return True
         except Exception as e:
-            logger.error(f"Ошибка при сохранении базы данных: {e}")
+            logger.error(f"Ошибка при сохранении базы данных: {e}\n{traceback.format_exc()}")
             return False
 
     def search(self, query, top_k=3):
@@ -128,11 +161,19 @@ class VectorDB:
 
             # Создаем эмбеддинг запроса
             query_embedding = self.create_embedding(query)
+            if query_embedding is None:
+                logger.error("Не удалось создать эмбеддинг для запроса")
+                return []
+
             query_embedding = np.array([query_embedding])
 
             # Ищем похожие документы
-            distances, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
-            logger.info(f"Найдено {len(indices[0])} документов для запроса")
+            try:
+                distances, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
+                logger.info(f"Найдено {len(indices[0])} документов для запроса")
+            except Exception as e:
+                logger.error(f"Ошибка при поиске в индексе: {e}\n{traceback.format_exc()}")
+                return []
 
             results = []
             for idx in indices[0]:
@@ -140,7 +181,7 @@ class VectorDB:
                     results.append(self.documents[idx])
             return results
         except Exception as e:
-            logger.error(f"Ошибка при поиске: {e}")
+            logger.error(f"Ошибка при поиске: {e}\n{traceback.format_exc()}")
             return []
 
     def remove_document(self, document_id):
