@@ -5,6 +5,7 @@ import logging
 from typing import List, Dict, Any
 import json
 from app.services.vector_db import VectorDB
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,13 @@ model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet
 def get_embedding(text: str) -> np.ndarray:
     """Получить векторное представление текста"""
     return model.encode([text])[0]
+
+def generate_document_id(file_path: str, text: str, index: int) -> str:
+    """
+    Генерирует уникальный ID документа на основе пути к файлу, текста и индекса
+    """
+    text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+    return f"{file_path}_{index}_{text_hash}"
 
 def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
     """
@@ -42,16 +50,20 @@ def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
 
         # Добавляем документы в базу
         success_count = 0
-        for doc in documents:
+        for idx, doc in enumerate(documents):
             if isinstance(doc, str):
                 text = doc
             else:
                 text = doc.get('text', '')
 
             if text:
-                document_id = f"{file_path}_{success_count}"
+                # Генерируем уникальный ID для документа
+                document_id = generate_document_id(file_path, text, idx)
                 if vector_db.add_document(text, document_id):
                     success_count += 1
+                    logger.info(f"Документ {idx + 1}/{len(documents)} успешно добавлен")
+                else:
+                    logger.warning(f"Не удалось добавить документ {idx + 1}/{len(documents)}")
 
         logger.info(f"Успешно добавлено {success_count} из {len(documents)} документов в векторную БД")
         return success_count > 0
