@@ -51,19 +51,23 @@ def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
         # Добавляем документы в базу
         success_count = 0
         for idx, doc in enumerate(documents):
-            if isinstance(doc, str):
-                text = doc
-            else:
-                text = doc.get('text', '')
-
-            if text:
-                # Генерируем уникальный ID для документа
-                document_id = generate_document_id(file_path, text, idx)
-                if vector_db.add_document(text, document_id):
-                    success_count += 1
-                    logger.info(f"Документ {idx + 1}/{len(documents)} успешно добавлен")
+            try:
+                if isinstance(doc, str):
+                    text = doc
                 else:
-                    logger.warning(f"Не удалось добавить документ {idx + 1}/{len(documents)}")
+                    text = doc.get('text', '')
+
+                if text:
+                    # Генерируем уникальный ID для документа
+                    document_id = generate_document_id(file_path, text, idx)
+                    if vector_db.add_document(text, document_id):
+                        success_count += 1
+                        logger.info(f"Документ {idx + 1}/{len(documents)} успешно добавлен")
+                    else:
+                        logger.warning(f"Не удалось добавить документ {idx + 1}/{len(documents)}")
+            except Exception as e:
+                logger.error(f"Ошибка при добавлении документа {idx + 1}: {str(e)}")
+                continue
 
         logger.info(f"Успешно добавлено {success_count} из {len(documents)} документов в векторную БД")
         return success_count > 0
@@ -87,6 +91,7 @@ def answer_question(question: str, vector_db_path: str) -> str:
 
         # Ищем похожие документы
         results = vector_db.search(question, top_k=3)
+        logger.info(f"Найдено документов: {len(results)}")
 
         if not results:
             logger.warning("Не найдено релевантных документов для ответа")

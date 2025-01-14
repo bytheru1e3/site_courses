@@ -84,7 +84,8 @@
 
 <!-- JavaScript для обработки чата -->
 <script>
-    document.getElementById('questionForm').addEventListener('submit', async function(e) {
+    // Обработка отправки формы
+    async function handleSubmit(e) {
         e.preventDefault();
 
         const courseId = document.getElementById('courseSelect').value;
@@ -129,6 +130,18 @@
         } catch (error) {
             console.error('Error:', error);
             alert('Произошла ошибка при отправке вопроса');
+        }
+    }
+
+    // Обработка события отправки формы
+    document.getElementById('questionForm').addEventListener('submit', handleSubmit);
+
+    // Обработка нажатия Enter в текстовом поле
+    document.getElementById('questionInput').addEventListener('keydown', function(e) {
+        // Проверяем, что нажат Enter без Shift
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault(); // Отменяем стандартное поведение
+            handleSubmit(e);
         }
     });
 
