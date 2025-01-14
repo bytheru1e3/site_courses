@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -180,33 +181,42 @@ class CourseBot:
 
                     if not answer or answer == "К сожалению, не удалось найти релевантную информацию для ответа на ваш вопрос.":
                         await message.reply(
-                            "К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
-                            "Попробуйте переформулировать вопрос или выбрать другой курс.",
+                            "❌ К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
+                            "💡 Попробуйте переформулировать вопрос или выбрать другой курс.",
                             reply_markup=keyboard
                         )
                         return
 
-                    # Формируем структурированный ответ
-                    response = (
-                        f"📚 Результаты поиска по курсу «{course.title}»\n"
-                        f"❓ Ваш вопрос: {question}\n\n"
-                        f"🔍 Найденная информация:\n{answer}"
+                    # Формируем полный ответ с улучшенным форматированием
+                    full_response = (
+                        f"📚 <b>Результаты поиска по курсу</b>\n"
+                        f"<i>{course.title}</i>\n\n"
+                        f"❓ <b>Ваш вопрос:</b>\n{question}\n\n"
+                        f"🔍 <b>Найденная информация:</b>\n{answer}"
                     )
 
-                    await message.reply(response, reply_markup=keyboard)
+                    # Отправляем ответ с разбиением на части при необходимости
+                    await self.send_split_message(
+                        chat_id=message.chat.id,
+                        text=full_response,
+                        parse_mode="HTML",
+                        reply_markup=keyboard
+                    )
                     logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
 
                 except Exception as e:
-                    logger.error(f"Error processing vector search: {e}", exc_info=True)
-                    await message.reply("❌ Произошла ошибка при поиске ответа")
+                    logger.error(f"Error processing question: {str(e)}", exc_info=True)
+                    await message.reply(
+                        "❌ Произошла ошибка при обработке запроса. Пожалуйста, попробуйте еще раз.",
+                        reply_markup=keyboard
+                    )
 
-                # Очищаем состояние пользователя
+                # Очищаем состояние пользователя после обработки вопроса
                 self.user_states.pop(user_id, None)
 
         except Exception as e:
             logger.error(f"Error processing question: {e}", exc_info=True)
             await message.reply("❌ Произошла ошибка при обработке вашего вопроса")
-            # Очищаем состояние пользователя в случае ошибки
             if user_id in locals():
                 self.user_states.pop(user_id, None)
 
@@ -409,3 +419,108 @@ class CourseBot:
         except Exception as e:
             logger.error(f"Error starting bot: {e}")
             raise
+
+    async def send_split_message(self, chat_id: int, text: str, parse_mode=None, reply_markup=None):
+        """Отправка длинного сообщения с разбиением на части"""
+        MAX_MESSAGE_LENGTH = 3000  # Maximum length for a single message
+
+        try:
+            if len(text) <= MAX_MESSAGE_LENGTH:
+                await self.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup
+                )
+                return
+
+            parts = []
+            while text:
+                if len(text) <= MAX_MESSAGE_LENGTH:
+                    parts.append(text)
+                    break
+
+                # Find the best split point
+                split_point = text[:MAX_MESSAGE_LENGTH].rfind('</b>')
+                if split_point == -1:
+                    split_point = text[:MAX_MESSAGE_LENGTH].rfind('</i>')
+                if split_point == -1:
+                    split_point = text[:MAX_MESSAGE_LENGTH].rfind('\n')
+                if split_point == -1:
+                    split_point = text[:MAX_MESSAGE_LENGTH].rfind('. ')
+                if split_point == -1:
+                    split_point = text[:MAX_MESSAGE_LENGTH].rfind(' ')
+                if split_point == -1:
+                    split_point = MAX_MESSAGE_LENGTH
+
+                # Add part and prepare for next iteration
+                part = text[:split_point]
+
+                # Handle HTML tags
+                if parse_mode == "HTML":
+                    # Count open tags
+                    open_b = part.count('<b>') - part.count('</b>')
+                    open_i = part.count('<i>') - part.count('</i>')
+
+                    # Close open tags
+                    if open_b > 0:
+                        part += '</b>' * open_b
+                    if open_i > 0:
+                        part += '</i>' * open_i
+
+                parts.append(part)
+
+                # Prepare next part
+                text = text[split_point:].lstrip()
+
+                # Restore HTML tags for next part
+                if parse_mode == "HTML":
+                    if open_b > 0:
+                        text = '<b>' * open_b + text
+                    if open_i > 0:
+                        text = '<i>' * open_i + text
+
+            # Send message parts
+            total_parts = len(parts)
+            for i, part in enumerate(parts):
+                try:
+                    # Add part indicator
+                    if total_parts > 1:
+                        if parse_mode == "HTML":
+                            part += f"\n\n<i>📄 Часть {i+1} из {total_parts}</i>"
+                        else:
+                            part += f"\n\n📄 Часть {i+1} из {total_parts}"
+
+                    # Send with appropriate markup
+                    if i == total_parts - 1:  # Last part
+                        await self.bot.send_message(
+                            chat_id=chat_id,
+                            text=part,
+                            parse_mode=parse_mode,
+                            reply_markup=reply_markup
+                        )
+                    else:
+                        await self.bot.send_message(
+                            chat_id=chat_id,
+                            text=part,
+                            parse_mode=parse_mode
+                        )
+
+                    # Add small delay between messages
+                    if i < total_parts - 1:
+                        await asyncio.sleep(0.5)
+
+                except Exception as e:
+                    logger.error(f"Error sending message part {i+1}: {str(e)}")
+                    await self.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"❌ Ошибка при отправке части {i+1} сообщения",
+                        parse_mode=None
+                    )
+
+        except Exception as e:
+            logger.error(f"Error in send_split_message: {str(e)}")
+            await self.bot.send_message(
+                chat_id=chat_id,
+                text="❌ Произошла ошибка при отправке сообщения"
+            )
