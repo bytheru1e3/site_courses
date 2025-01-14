@@ -91,7 +91,7 @@ def manage_course_access(course_id):
             return redirect(url_for('admin.manage_course_access', course_id=course_id))
 
         users = User.query.all()
-        return render_template('admin/course_access.html', course=course, users=users)
+        return render_template('course/manage_access.html', course=course, users=users)
     except Exception as e:
         logger.error(f"Ошибка при управлении доступом к курсу: {str(e)}")
         flash('Произошла ошибка при управлении доступом', 'error')

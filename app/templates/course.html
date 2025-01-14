@@ -9,9 +9,14 @@
         <p class="text-muted">{{ course.description }}</p>
     </div>
     <div class="col text-end">
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaterialModal">
-            <i class="bi bi-plus-circle me-2"></i>Добавить материал
-        </button>
+        <div class="btn-group">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaterialModal">
+                <i class="bi bi-plus-circle me-2"></i>Добавить материал
+            </button>
+            <a href="{{ url_for('admin.manage_course_access', course_id=course.id) }}" class="btn btn-outline-primary">
+                <i class="bi bi-people me-2"></i>Управление доступом пользователей
+            </a>
+        </div>
     </div>
 </div>
 
