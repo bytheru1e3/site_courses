@@ -66,7 +66,7 @@ def answer_question(question: str, vector_db_path: str) -> str:
             return "К сожалению, я не нашел информации по вашему вопросу в доступных материалах. Попробуйте переформулировать вопрос или уточнить, что именно вас интересует."
 
         # Формируем контекст из найденных документов
-        context = "Контекст из документов:\n"
+        context = ""
         for result in results:
             if isinstance(result, dict) and 'text' in result:
                 # Нормализуем текст
@@ -84,23 +84,25 @@ def answer_question(question: str, vector_db_path: str) -> str:
 
 Вопрос пользователя: {question}
 
+Контекст:
 {context}
 
-Пожалуйста, сформируй ответ на основе предоставленного контекста.
+Сформируй четкий и понятный ответ на основе предоставленного контекста.
 """
 
-        # Получаем ответ от нейросети
-        gigachat = GigaChatAPI()
-        ai_response = gigachat.generate_response(prompt)
+        try:
+            # Получаем ответ от нейросети
+            gigachat = GigaChatAPI()
+            ai_response = gigachat.generate_response(prompt)
 
-        if not ai_response:
-            logger.warning("Не удалось получить ответ от нейросети, возвращаем необработанный контекст")
-            return context
+            # Обрезаем ответ, если он слишком длинный
+            final_response = truncate_text(ai_response)
+            logger.info("Ответ успешно сформирован через GigaChat")
+            return final_response
 
-        # Обрезаем ответ, если он слишком длинный
-        final_response = truncate_text(ai_response)
-        logger.info("Ответ успешно сформирован")
-        return final_response
+        except Exception as e:
+            logger.error(f"Ошибка при получении ответа от GigaChat: {str(e)}")
+            return "Извините, произошла ошибка при обработке вашего вопроса. Пожалуйста, попробуйте еще раз или обратитесь к администратору."
 
     except Exception as e:
         logger.error(f"Ошибка в answer_question: {str(e)}")
