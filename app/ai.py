@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 import json
 import hashlib
 from app.services.vector_db import VectorDB
+from app.services.gigachat import GigaChatAPI
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +19,13 @@ MAX_RESULTS = 2  # Limit number of results to keep response concise
 SYSTEM_PROMPT = """
 Ты интеллектуальный помощник, который отвечает на вопросы по контексту. 
 Твоя задача:
-1. Отвечать ТОЛЬКО на основе предоставленной информации из контекста
-2. Если ответа нет в контексте, честно сообщить об этом
-3. Адаптировать информацию под пользователя, делая её понятной и доступной
-4. Использовать вежливый и дружелюбный тон
-5. Давать краткие, но информативные ответы
+1. Проанализировать предоставленный контекст и вопрос пользователя
+2. Сформировать понятный и структурированный ответ
+3. Использовать ТОЛЬКО информацию из контекста
+4. Если в контексте нет информации для ответа - честно сообщить об этом
+5. Адаптировать технический язык под простое и доступное объяснение
+6. Ответ должен быть кратким но информативным
+7. Использовать вежливый и дружелюбный тон
 """
 
 def get_embedding(text: str) -> np.ndarray:
@@ -44,7 +47,7 @@ def truncate_text(text: str, max_length: int = MAX_RESPONSE_LENGTH) -> str:
 
 def answer_question(question: str, vector_db_path: str) -> str:
     """
-    Ответить на вопрос, используя векторную базу данных
+    Ответить на вопрос, используя векторную базу данных и нейросеть
     """
     try:
         logger.info(f"Попытка ответить на вопрос: {question}")
@@ -55,27 +58,47 @@ def answer_question(question: str, vector_db_path: str) -> str:
             os.path.join(vector_db_path, "documents.json")
         )
 
-        # Ищем похожие документы, ограничиваем количество результатов
+        # Ищем похожие документы
         results = vector_db.search(question, top_k=MAX_RESULTS)
         logger.info(f"Найдено документов: {len(results)}")
 
         if not results:
             return "К сожалению, я не нашел информации по вашему вопросу в доступных материалах. Попробуйте переформулировать вопрос или уточнить, что именно вас интересует."
 
-        # Формируем контекст для ответа
-        context = ""
+        # Формируем контекст из найденных документов
+        context = "Контекст из документов:\n"
         for result in results:
             if isinstance(result, dict) and 'text' in result:
-                context += result['text'] + "\n\n"
+                # Нормализуем текст
+                text = result['text'].replace('\n', ' ').replace('\r', '')
+                text = ' '.join(text.split())
+                context += text + "\n\n"
             else:
-                context += str(result) + "\n\n"
+                text = str(result).replace('\n', ' ').replace('\r', '')
+                text = ' '.join(text.split())
+                context += text + "\n\n"
 
-        # Готовим финальный ответ с учетом системного промпта
-        response = f"На основе найденных материалов, отвечаю на ваш вопрос:\n\n"
-        response += context
+        # Формируем промпт для нейросети
+        prompt = f"""
+{SYSTEM_PROMPT}
+
+Вопрос пользователя: {question}
+
+{context}
+
+Пожалуйста, сформируй ответ на основе предоставленного контекста.
+"""
+
+        # Получаем ответ от нейросети
+        gigachat = GigaChatAPI()
+        ai_response = gigachat.generate_response(prompt)
+
+        if not ai_response:
+            logger.warning("Не удалось получить ответ от нейросети, возвращаем необработанный контекст")
+            return context
 
         # Обрезаем ответ, если он слишком длинный
-        final_response = truncate_text(response)
+        final_response = truncate_text(ai_response)
         logger.info("Ответ успешно сформирован")
         return final_response
 
@@ -84,20 +107,14 @@ def answer_question(question: str, vector_db_path: str) -> str:
         return "Извините, произошла ошибка при поиске ответа на ваш вопрос. Пожалуйста, попробуйте еще раз или обратитесь к администратору системы."
 
 def generate_document_id(file_path: str, text: str, index: int) -> str:
-    """
-    Генерирует уникальный ID документа на основе пути к файлу, текста и индекса
-    """
+    """Генерирует уникальный ID документа"""
     text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
     return f"{file_path}_{index}_{text_hash}"
 
 def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
-    """
-    Обработать файл и добавить его содержимое в векторную базу данных
-    """
+    """Обработать файл и добавить его содержимое в векторную базу данных"""
     try:
         logger.info(f"Начало обработки файла для добавления в векторную БД: {file_path}")
-
-        # Проверяем существование директорий
         os.makedirs(save_path, exist_ok=True)
 
         from app.file_processing import process_file
@@ -109,13 +126,11 @@ def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
 
         logger.info(f"Извлечено {len(documents)} документов из файла")
 
-        # Создаем или получаем экземпляр VectorDB
         vector_db = VectorDB(
             os.path.join(save_path, "vector_index.faiss"),
             os.path.join(save_path, "documents.json")
         )
 
-        # Добавляем документы в базу
         success_count = 0
         for idx, doc in enumerate(documents):
             try:
@@ -125,7 +140,6 @@ def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
                     text = doc.get('text', '')
 
                 if text:
-                    # Генерируем уникальный ID для документа
                     document_id = generate_document_id(file_path, text, idx)
                     if vector_db.add_document(text, document_id):
                         success_count += 1
