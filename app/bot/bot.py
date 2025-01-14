@@ -8,7 +8,7 @@ from app.models import Course, db, User
 from flask import Flask
 import requests
 from app.services.vector_db import VectorDB
-from app.ai import answer_question
+from app.ai import answer_question, GigaChatAPI
 
 logger = logging.getLogger(__name__)
 
@@ -34,36 +34,6 @@ class CourseBot:
         # Инициализация VectorDB
         self.vector_db_path = os.path.join(os.getcwd(), "app", "data")
         logger.info(f"Vector DB path: {self.vector_db_path}")
-
-    def _register_handlers(self):
-        """Регистрация обработчиков команд"""
-        try:
-            self.dp.message.register(self.start_handler, Command("start"))
-            self.dp.message.register(self.register_handler, Command("register"))
-            self.dp.message.register(self.auth_handler, Command("auth"))
-            self.dp.message.register(self.list_courses_handler, Command("courses"))
-            self.dp.message.register(self.help_handler, Command("help"))
-            self.dp.message.register(self.ask_handler, Command("ask"))  # Обработчик команды /ask
-            self.dp.message.register(self.process_question)  # Обработчик для вопросов после выбора курса
-            self.dp.callback_query.register(
-                self.course_callback_handler,
-                lambda c: c.data.startswith('course_')
-            )
-            self.dp.callback_query.register(
-                self.materials_callback_handler,
-                lambda c: c.data.startswith('materials_')
-            )
-            self.dp.callback_query.register(
-                self.ask_course_callback_handler,
-                lambda c: c.data.startswith('ask_course_')
-            )
-            self.dp.callback_query.register(
-                self.after_question_callback_handler,
-                lambda c: c.data in ['ask_new_question', 'end_dialog']
-            )
-        except Exception as e:
-            logger.error(f"Error registering handlers: {e}", exc_info=True)
-            raise
 
     async def start_handler(self, message: types.Message):
         """Обработчик команды /start"""
@@ -147,39 +117,34 @@ class CourseBot:
             user_id = message.from_user.id
             user_state = self.user_states.get(user_id)
 
-            # Проверяем, ожидаем ли мы вопрос от этого пользователя
             if not user_state or not user_state.get('waiting_for_question'):
                 return
 
             course_id = user_state['course_id']
-            question = message.text
+            question = message.text.strip()
 
             with self.app.app_context():
-                # Проверяем существование курса
                 course = Course.query.get(course_id)
                 if not course:
                     await message.reply("❌ Курс не найден")
                     return
 
-                # Проверяем доступ пользователя к курсу
                 user = User.query.filter_by(telegram_id=str(message.from_user.id)).first()
                 if not user or not user.has_access_to_course(course):
                     await message.reply("❌ У вас нет доступа к этому курсу")
                     return
 
-                # Поиск ответа с использованием векторной базы данных
                 await message.reply("🔍 Ищу ответ на ваш вопрос...")
 
                 try:
                     answer = answer_question(question, self.vector_db_path)
 
-                    # Создаем клавиатуру с кнопками
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="📝 Задать новый вопрос", callback_data="ask_new_question")],
                         [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
                     ])
 
-                    if not answer or "К сожалению, я не нашел информации" in answer:
+                    if "К сожалению, я не нашел информации" in answer:
                         await message.reply(
                             "❌ К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
                             "💡 Попробуйте переформулировать вопрос или выбрать другой курс.",
@@ -187,15 +152,13 @@ class CourseBot:
                         )
                         return
 
-                    # Формируем полный ответ с улучшенным форматированием
                     full_response = (
                         f"📚 <b>Результаты поиска по курсу</b>\n"
                         f"<i>{course.title}</i>\n\n"
                         f"❓ <b>Ваш вопрос:</b>\n{question}\n\n"
-                        f"🔍 <b>Найденная информация:</b>\n{answer}"
+                        f"🔍 <b>Ответ:</b>\n{answer}"
                     )
 
-                    # Отправляем ответ с разбиением на части при необходимости
                     await self.send_split_message(
                         chat_id=message.chat.id,
                         text=full_response,
@@ -211,7 +174,6 @@ class CourseBot:
                         reply_markup=keyboard
                     )
 
-                # Очищаем состояние пользователя после обработки вопроса
                 self.user_states.pop(user_id, None)
 
         except Exception as e:
@@ -411,6 +373,36 @@ class CourseBot:
             logger.error(f"Error in materials callback handler: {e}")
             await callback.answer("❌ Произошла ошибка")
 
+    async def _register_handlers(self):
+        """Регистрация обработчиков команд"""
+        try:
+            self.dp.message.register(self.start_handler, Command("start"))
+            self.dp.message.register(self.register_handler, Command("register"))
+            self.dp.message.register(self.auth_handler, Command("auth"))
+            self.dp.message.register(self.list_courses_handler, Command("courses"))
+            self.dp.message.register(self.help_handler, Command("help"))
+            self.dp.message.register(self.ask_handler, Command("ask"))  # Обработчик команды /ask
+            self.dp.message.register(self.process_question)  # Обработчик для вопросов после выбора курса
+            self.dp.callback_query.register(
+                self.course_callback_handler,
+                lambda c: c.data.startswith('course_')
+            )
+            self.dp.callback_query.register(
+                self.materials_callback_handler,
+                lambda c: c.data.startswith('materials_')
+            )
+            self.dp.callback_query.register(
+                self.ask_course_callback_handler,
+                lambda c: c.data.startswith('ask_course_')
+            )
+            self.dp.callback_query.register(
+                self.after_question_callback_handler,
+                lambda c: c.data in ['ask_new_question', 'end_dialog']
+            )
+        except Exception as e:
+            logger.error(f"Error registering handlers: {e}", exc_info=True)
+            raise
+
     async def start_polling(self):
         """Запуск бота"""
         try:
@@ -422,7 +414,7 @@ class CourseBot:
 
     async def send_split_message(self, chat_id: int, text: str, parse_mode=None, reply_markup=None):
         """Отправка длинного сообщения с разбиением на части"""
-        MAX_MESSAGE_LENGTH = 3000  # Maximum length for a single message
+        MAX_MESSAGE_LENGTH = 3000
 
         try:
             if len(text) <= MAX_MESSAGE_LENGTH:
@@ -440,59 +432,50 @@ class CourseBot:
                     parts.append(text)
                     break
 
-                # Find the best split point
-                split_point = text[:MAX_MESSAGE_LENGTH].rfind('</b>')
-                if split_point == -1:
-                    split_point = text[:MAX_MESSAGE_LENGTH].rfind('</i>')
+                split_point = text[:MAX_MESSAGE_LENGTH].rfind('\n\n')
                 if split_point == -1:
                     split_point = text[:MAX_MESSAGE_LENGTH].rfind('\n')
                 if split_point == -1:
                     split_point = text[:MAX_MESSAGE_LENGTH].rfind('. ')
                 if split_point == -1:
-                    split_point = text[:MAX_MESSAGE_LENGTH].rfind(' ')
-                if split_point == -1:
                     split_point = MAX_MESSAGE_LENGTH
 
-                # Add part and prepare for next iteration
-                part = text[:split_point]
+                part = text[:split_point].strip()
 
-                # Handle HTML tags
+                # Обработка HTML тегов
                 if parse_mode == "HTML":
-                    # Count open tags
-                    open_b = part.count('<b>') - part.count('</b>')
-                    open_i = part.count('<i>') - part.count('</i>')
+                    open_tags = []
+                    for i, char in enumerate(part):
+                        if char == '<':
+                            tag_end = part.find('>', i)
+                            if tag_end != -1:
+                                tag = part[i:tag_end+1]
+                                if not tag.startswith('</'):
+                                    tag_name = tag[1:-1]
+                                    open_tags.append(tag_name)
+                        elif char == '<' and part[i:].startswith('</'):
+                            tag_end = part.find('>', i)
+                            if tag_end != -1:
+                                tag = part[i+2:tag_end]
+                                if tag in open_tags:
+                                    open_tags.remove(tag)
 
-                    # Close open tags
-                    if open_b > 0:
-                        part += '</b>' * open_b
-                    if open_i > 0:
-                        part += '</i>' * open_i
+                    # Закрываем открытые теги
+                    for tag in reversed(open_tags):
+                        part += f'</{tag}>'
 
                 parts.append(part)
+                text = text[split_point:].strip()
 
-                # Prepare next part
-                text = text[split_point:].lstrip()
+                # Восстанавливаем открытые теги для следующей части
+                if parse_mode == "HTML" and open_tags:
+                    for tag in open_tags:
+                        text = f'<{tag}>' + text
 
-                # Restore HTML tags for next part
-                if parse_mode == "HTML":
-                    if open_b > 0:
-                        text = '<b>' * open_b + text
-                    if open_i > 0:
-                        text = '<i>' * open_i + text
-
-            # Send message parts
-            total_parts = len(parts)
+            # Отправляем части сообщения
             for i, part in enumerate(parts):
                 try:
-                    # Add part indicator
-                    if total_parts > 1:
-                        if parse_mode == "HTML":
-                            part += f"\n\n<i>📄 Часть {i+1} из {total_parts}</i>"
-                        else:
-                            part += f"\n\n📄 Часть {i+1} из {total_parts}"
-
-                    # Send with appropriate markup
-                    if i == total_parts - 1:  # Last part
+                    if i == len(parts) - 1:  # Последняя часть
                         await self.bot.send_message(
                             chat_id=chat_id,
                             text=part,
@@ -506,16 +489,14 @@ class CourseBot:
                             parse_mode=parse_mode
                         )
 
-                    # Add small delay between messages
-                    if i < total_parts - 1:
+                    if i < len(parts) - 1:
                         await asyncio.sleep(0.5)
 
                 except Exception as e:
                     logger.error(f"Error sending message part {i+1}: {str(e)}")
                     await self.bot.send_message(
                         chat_id=chat_id,
-                        text=f"❌ Ошибка при отправке части {i+1} сообщения",
-                        parse_mode=None
+                        text=f"❌ Ошибка при отправке части {i+1} сообщения"
                     )
 
         except Exception as e:

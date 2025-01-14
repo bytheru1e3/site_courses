@@ -2,31 +2,104 @@ import os
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 import hashlib
+import requests
 from app.services.vector_db import VectorDB
-from app.services.gigachat import GigaChatAPI
 
 logger = logging.getLogger(__name__)
 
 # Инициализируем модель для embeddings
 model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
 
+class GigaChatAPI:
+    """Класс для работы с GigaChat API"""
+
+    def __init__(self):
+        self.api_key = os.environ.get('GIGACHAT_API_KEY')
+        if not self.api_key:
+            logger.error("GIGACHAT_API_KEY не найден в переменных окружения")
+            raise ValueError("GIGACHAT_API_KEY не найден")
+
+        self.base_url = "https://gigachat.devices.sberbank.ru/api/v1"
+        self.token = None
+
+    def _get_token(self) -> Optional[str]:
+        """Получение токена для доступа к API"""
+        try:
+            headers = {
+                'Authorization': f'Bearer {self.api_key}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+
+            response = requests.post(
+                f"{self.base_url}/oauth/token",
+                headers=headers,
+                timeout=10
+            )
+
+            response.raise_for_status()
+            data = response.json()
+            return data.get('access_token')
+
+        except Exception as e:
+            logger.error(f"Ошибка при получении токена: {str(e)}")
+            raise
+
+    def generate_response(self, prompt: str) -> str:
+        """Генерация ответа с использованием GigaChat API"""
+        try:
+            if not self.token:
+                self.token = self._get_token()
+
+            headers = {
+                'Authorization': f'Bearer {self.token}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+
+            data = {
+                'model': 'GigaChat:latest',
+                'messages': [
+                    {
+                        'role': 'system',
+                        'content': 'Ты - интеллектуальный помощник, который отвечает на вопросы по контексту. Если ответа нет в контексте, отвечай, что не нашел информацию. Каждую информацию адаптируй под ответ для пользователя.'
+                    },
+                    {
+                        'role': 'user',
+                        'content': prompt
+                    }
+                ],
+                'temperature': 0.7,
+                'max_tokens': 1500
+            }
+
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=30
+            )
+
+            response.raise_for_status()
+            result = response.json()
+
+            if 'choices' in result and result['choices']:
+                answer = result['choices'][0]['message']['content']
+                logger.info("Успешно получен ответ от GigaChat API")
+                return answer
+            else:
+                logger.error("Неверный формат ответа от API")
+                raise ValueError("Неверный формат ответа от API")
+
+        except Exception as e:
+            logger.error(f"Ошибка при генерации ответа: {str(e)}")
+            raise
+
 MAX_RESPONSE_LENGTH = 3000  # Maximum length for a single response message
 MAX_RESULTS = 2  # Limit number of results to keep response concise
-
-SYSTEM_PROMPT = """
-Ты интеллектуальный помощник, который отвечает на вопросы по контексту. 
-Твоя задача:
-1. Проанализировать предоставленный контекст и вопрос пользователя
-2. Сформировать понятный и структурированный ответ
-3. Использовать ТОЛЬКО информацию из контекста
-4. Если в контексте нет информации для ответа - честно сообщить об этом
-5. Адаптировать технический язык под простое и доступное объяснение
-6. Ответ должен быть кратким но информативным
-7. Использовать вежливый и дружелюбный тон
-"""
 
 def get_embedding(text: str) -> np.ndarray:
     """Получить векторное представление текста"""
@@ -37,7 +110,6 @@ def truncate_text(text: str, max_length: int = MAX_RESPONSE_LENGTH) -> str:
     if len(text) <= max_length:
         return text
 
-    # Находим последнюю точку перед максимальной длиной
     truncated = text[:max_length]
     last_period = truncated.rfind('.')
 
@@ -47,7 +119,7 @@ def truncate_text(text: str, max_length: int = MAX_RESPONSE_LENGTH) -> str:
 
 def answer_question(question: str, vector_db_path: str) -> str:
     """
-    Ответить на вопрос, используя векторную базу данных и нейросеть
+    Ответить на вопрос, используя векторную базу данных и GigaChat
     """
     try:
         logger.info(f"Попытка ответить на вопрос: {question}")
@@ -69,7 +141,6 @@ def answer_question(question: str, vector_db_path: str) -> str:
         context = ""
         for result in results:
             if isinstance(result, dict) and 'text' in result:
-                # Нормализуем текст
                 text = result['text'].replace('\n', ' ').replace('\r', '')
                 text = ' '.join(text.split())
                 context += text + "\n\n"
@@ -78,25 +149,22 @@ def answer_question(question: str, vector_db_path: str) -> str:
                 text = ' '.join(text.split())
                 context += text + "\n\n"
 
-        # Формируем промпт для нейросети
+        # Формируем промпт для GigaChat
         prompt = f"""
-{SYSTEM_PROMPT}
-
 Вопрос пользователя: {question}
 
 Контекст:
 {context}
 
-Сформируй четкий и понятный ответ на основе предоставленного контекста.
-"""
+Пожалуйста, сформируй понятный и структурированный ответ на основе предоставленного контекста."""
 
         try:
-            # Получаем ответ от нейросети
+            # Получаем ответ от GigaChat
             gigachat = GigaChatAPI()
-            ai_response = gigachat.generate_response(prompt)
+            response = gigachat.generate_response(prompt)
 
             # Обрезаем ответ, если он слишком длинный
-            final_response = truncate_text(ai_response)
+            final_response = truncate_text(response)
             logger.info("Ответ успешно сформирован через GigaChat")
             return final_response
 
