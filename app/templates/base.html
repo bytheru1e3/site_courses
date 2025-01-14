@@ -19,7 +19,9 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.index') }}">Главная</a>
+                        <a class="nav-link" href="{{ url_for('main.index') }}">
+                            <i class="bi bi-house-door me-1"></i>Главная
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.chat') }}">
@@ -43,26 +45,41 @@
                             </li>
                             <li>
                                 <a class="dropdown-item" href="{{ url_for('admin.users') }}">
-                                    <i class="bi bi-people me-2"></i>Пользователи
+                                    <i class="bi bi-people me-2"></i>Управление пользователями
                                 </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="{{ url_for('admin.courses') }}">
-                                    <i class="bi bi-book me-2"></i>Курсы
+                                    <i class="bi bi-book me-2"></i>Управление курсами
                                 </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="{{ url_for('admin.materials') }}">
-                                    <i class="bi bi-file-text me-2"></i>Учебные материалы
+                                    <i class="bi bi-file-text me-2"></i>Управление материалами
                                 </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="{{ url_for('admin.files') }}">
-                                    <i class="bi bi-files me-2"></i>Файлы материалов
+                                    <i class="bi bi-files me-2"></i>Управление файлами
                                 </a>
                             </li>
                         </ul>
                     </li>
+                </ul>
+                <ul class="navbar-nav">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.logout') }}">
+                            <i class="bi bi-box-arrow-right me-1"></i>Выход
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.login') }}">
+                            <i class="bi bi-box-arrow-in-right me-1"></i>Вход
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>

@@ -6,8 +6,8 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from app.models import Course, db, User
 from flask import Flask
 import requests
-from app.services.file_processor import FileProcessor
 from app.services.vector_db import VectorDB
+from app.ai import answer_question
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,10 @@ class CourseBot:
         self.user_states = {}
         self._register_handlers()
         logger.info("Bot handlers registered successfully")
+
+        # Инициализация VectorDB
+        self.vector_db_path = os.path.join(os.getcwd(), "app", "data")
+        logger.info(f"Vector DB path: {self.vector_db_path}")
 
     def _register_handlers(self):
         """Регистрация обработчиков команд"""
@@ -162,41 +166,39 @@ class CourseBot:
                     await message.reply("❌ У вас нет доступа к этому курсу")
                     return
 
-                # Поиск релевантных материалов
+                # Поиск ответа с использованием векторной базы данных
                 await message.reply("🔍 Ищу ответ на ваш вопрос...")
-                search_results = FileProcessor.search_similar_documents(question, top_k=3)
 
-                # Создаем клавиатуру с кнопками
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="📝 Задать новый вопрос", callback_data="ask_new_question")],
-                    [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
-                ])
+                try:
+                    answer = answer_question(question, self.vector_db_path)
 
-                if not search_results:
-                    await message.reply(
-                        "К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
-                        "Попробуйте переформулировать вопрос или выбрать другой курс.",
-                        reply_markup=keyboard
+                    # Создаем клавиатуру с кнопками
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="📝 Задать новый вопрос", callback_data="ask_new_question")],
+                        [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
+                    ])
+
+                    if not answer or answer == "К сожалению, не удалось найти релевантную информацию для ответа на ваш вопрос.":
+                        await message.reply(
+                            "К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
+                            "Попробуйте переформулировать вопрос или выбрать другой курс.",
+                            reply_markup=keyboard
+                        )
+                        return
+
+                    # Формируем структурированный ответ
+                    response = (
+                        f"📚 Результаты поиска по курсу «{course.title}»\n"
+                        f"❓ Ваш вопрос: {question}\n\n"
+                        f"🔍 Найденная информация:\n{answer}"
                     )
-                    return
 
-                # Формируем структурированный ответ
-                response = (
-                    f"📚 Результаты поиска по курсу «{course.title}»\n"
-                    f"❓ Ваш вопрос: {question}\n\n"
-                    "🔍 Найденная информация:\n"
-                )
+                    await message.reply(response, reply_markup=keyboard)
+                    logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
 
-                for idx, result in enumerate(search_results, 1):
-                    text = result.get('text', '')
-                    # Ограничиваем длину текста для лучшей читаемости
-                    max_length = 300
-                    if len(text) > max_length:
-                        text = text[:max_length] + "..."
-                    response += f"\n{idx}. {text}\n"
-
-                await message.reply(response, reply_markup=keyboard)
-                logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
+                except Exception as e:
+                    logger.error(f"Error processing vector search: {e}", exc_info=True)
+                    await message.reply("❌ Произошла ошибка при поиске ответа")
 
                 # Очищаем состояние пользователя
                 self.user_states.pop(user_id, None)

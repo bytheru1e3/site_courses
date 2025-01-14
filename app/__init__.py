@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager
 import logging
 import os
 
@@ -9,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Инициализация расширений
 db = SQLAlchemy()
+login_manager = LoginManager()
 
 def create_app():
     app = Flask(__name__)
@@ -20,6 +22,15 @@ def create_app():
 
     # Инициализация расширений
     db.init_app(app)
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
+    login_manager.login_message_category = 'info'
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import User
+        return User.query.get(int(user_id))
 
     with app.app_context():
         # Импорт моделей для создания таблиц
@@ -36,11 +47,13 @@ def create_app():
         # Регистрация блюпринтов
         from app.routes import main
         from app.admin import admin
+        from app.auth import auth
 
         app.register_blueprint(main)
         app.register_blueprint(admin)
+        app.register_blueprint(auth)
 
-        # Создание администратора по умолчанию (kept for potential future use, could be removed)
+        # Создание администратора по умолчанию
         try:
             admin_exists = User.query.filter_by(username="admin").first()
             if not admin_exists:
@@ -56,6 +69,5 @@ def create_app():
         except Exception as e:
             logger.error(f"Error creating default admin: {e}")
             db.session.rollback()
-
 
     return app
