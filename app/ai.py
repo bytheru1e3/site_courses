@@ -1,7 +1,7 @@
 import os
-import logging
 from sentence_transformers import SentenceTransformer
 import numpy as np
+import logging
 from typing import List, Dict, Any
 import json
 from app.services.vector_db import VectorDB
@@ -20,12 +20,19 @@ def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
     Обработать файл и добавить его содержимое в векторную базу данных
     """
     try:
+        logger.info(f"Начало обработки файла для добавления в векторную БД: {file_path}")
+
+        # Проверяем существование директорий
+        os.makedirs(save_path, exist_ok=True)
+
         from app.file_processing import process_file
         documents = process_file(file_path)
 
         if not documents:
-            logger.error(f"No documents extracted from {file_path}")
+            logger.error(f"Не удалось извлечь документы из файла: {file_path}")
             return False
+
+        logger.info(f"Извлечено {len(documents)} документов из файла")
 
         # Создаем или получаем экземпляр VectorDB
         vector_db = VectorDB(
@@ -34,6 +41,7 @@ def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
         )
 
         # Добавляем документы в базу
+        success_count = 0
         for doc in documents:
             if isinstance(doc, str):
                 text = doc
@@ -41,13 +49,15 @@ def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
                 text = doc.get('text', '')
 
             if text:
-                vector_db.add_document(text, file_path)
+                document_id = f"{file_path}_{success_count}"
+                if vector_db.add_document(text, document_id):
+                    success_count += 1
 
-        logger.info(f"Successfully processed and indexed file: {file_path}")
-        return True
+        logger.info(f"Успешно добавлено {success_count} из {len(documents)} документов в векторную БД")
+        return success_count > 0
 
     except Exception as e:
-        logger.error(f"Error in add_file_to_vector_db: {str(e)}")
+        logger.error(f"Ошибка в add_file_to_vector_db: {str(e)}")
         return False
 
 def answer_question(question: str, vector_db_path: str) -> str:
@@ -55,6 +65,8 @@ def answer_question(question: str, vector_db_path: str) -> str:
     Ответить на вопрос, используя векторную базу данных
     """
     try:
+        logger.info(f"Попытка ответить на вопрос с использованием векторной БД: {question}")
+
         # Создаем или получаем экземпляр VectorDB
         vector_db = VectorDB(
             os.path.join(vector_db_path, "vector_index.faiss"),
@@ -65,6 +77,7 @@ def answer_question(question: str, vector_db_path: str) -> str:
         results = vector_db.search(question, top_k=3)
 
         if not results:
+            logger.warning("Не найдено релевантных документов для ответа")
             return "К сожалению, не удалось найти релевантную информацию для ответа на ваш вопрос."
 
         # Формируем ответ из найденных документов
@@ -75,14 +88,9 @@ def answer_question(question: str, vector_db_path: str) -> str:
             else:
                 response += f"{i}. {doc}\n\n"
 
+        logger.info("Ответ успешно сформирован")
         return response
 
     except Exception as e:
-        logger.error(f"Error in answer_question: {str(e)}")
+        logger.error(f"Ошибка в answer_question: {str(e)}")
         return "Произошла ошибка при поиске ответа на ваш вопрос."
-
-if __name__ == "__main__":
-    # Пример использования
-    vector_db_path = os.path.join(os.getcwd(), "app", "data")
-    question = "Что такое векторная база данных?"
-    print(answer_question(question, vector_db_path))

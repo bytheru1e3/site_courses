@@ -1,10 +1,11 @@
 import os
+import pickle
 import json
 import faiss
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 import logging
-import pickle
+from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,7 @@ class VectorDB:
     def __init__(self, index_path, documents_path):
         self.index_path = index_path
         self.documents_path = documents_path
+        self.model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
 
         # Создаем директории если они не существуют
         os.makedirs(os.path.dirname(index_path), exist_ok=True)
@@ -23,46 +25,37 @@ class VectorDB:
 
         if self.index is None:
             self.index = faiss.IndexFlatL2(384)  # Размерность для модели sentence-transformers
-
-        self.is_vectorizer_fitted = False
-        self.vectorizer = TfidfVectorizer()
+            logger.info("Created new FAISS index")
 
     def load(self):
         """Загрузка индекса и документов"""
         try:
             if os.path.exists(self.index_path):
-                with open(self.index_path, 'rb') as f:
-                    self.index = faiss.read_index(f)
+                self.index = faiss.read_index(self.index_path)
                 logger.info("Индекс успешно загружен")
+            else:
+                logger.warning(f"Индекс не найден по пути: {self.index_path}")
 
             if os.path.exists(self.documents_path):
                 with open(self.documents_path, 'rb') as f:
                     self.documents = pickle.load(f)
-                logger.info("Документы успешно загружены")
+                logger.info(f"Документы успешно загружены, количество: {len(self.documents)}")
+            else:
+                logger.warning(f"Файл документов не найден по пути: {self.documents_path}")
         except Exception as e:
             logger.error(f"Ошибка при загрузке базы данных: {e}")
             self.index = None
             self.documents = []
 
     def create_embedding(self, text):
+        """Создание эмбеддинга текста с помощью sentence-transformers"""
         try:
             if not text or not isinstance(text, str):
                 logger.error("Получен невалидный текст для создания эмбеддинга")
                 return np.zeros(384).astype('float32')
 
-            if not self.is_vectorizer_fitted:
-                vectors = self.vectorizer.fit_transform([text])
-                self.is_vectorizer_fitted = True
-            else:
-                vectors = self.vectorizer.transform([text])
-
-            # Нормализуем вектор к нужной размерности
-            embedding = vectors.toarray()[0]
-            if len(embedding) > 384:
-                embedding = embedding[:384]
-            elif len(embedding) < 384:
-                embedding = np.pad(embedding, (0, 384 - len(embedding)))
-
+            # Используем sentence-transformers для создания эмбеддинга
+            embedding = self.model.encode([text])[0]
             return embedding.astype('float32')
         except Exception as e:
             logger.error(f"Ошибка при создании эмбеддинга: {e}")
@@ -71,20 +64,36 @@ class VectorDB:
     def add_document(self, text, document_id):
         """Добавление документа в индекс"""
         try:
-            if text and isinstance(text, str):
-                if not any(doc['id'] == document_id for doc in self.documents):
-                    self.documents.append({
-                        'id': document_id,
-                        'text': text
-                    })
-                    embedding = self.create_embedding(text)
-                    embedding_array = np.array([embedding])
-                    self.index.add(embedding_array)
-                    logger.info(f"Документ {document_id} успешно добавлен в базу")
-                    self.save()
-                    return True
-                else:
-                    logger.warning(f"Документ {document_id} уже существует в базе")
+            if not text or not isinstance(text, str):
+                logger.error(f"Получен невалидный текст для документа {document_id}")
+                return False
+
+            # Проверяем, нет ли уже такого документа
+            if not any(doc.get('id') == document_id for doc in self.documents):
+                logger.info(f"Добавление нового документа с ID: {document_id}")
+
+                # Создаем эмбеддинг
+                embedding = self.create_embedding(text)
+                if embedding is None:
+                    logger.error(f"Не удалось создать эмбеддинг для документа {document_id}")
+                    return False
+
+                # Добавляем документ в список
+                self.documents.append({
+                    'id': document_id,
+                    'text': text
+                })
+
+                # Добавляем эмбеддинг в индекс
+                embedding_array = np.array([embedding])
+                self.index.add(embedding_array)
+
+                # Сохраняем изменения
+                self.save()
+                logger.info(f"Документ {document_id} успешно добавлен в базу")
+                return True
+            else:
+                logger.warning(f"Документ {document_id} уже существует в базе")
             return False
         except Exception as e:
             logger.error(f"Ошибка при добавлении документа: {e}")
@@ -93,11 +102,14 @@ class VectorDB:
     def save(self):
         """Сохранение индекса и документов"""
         try:
-            with open(self.index_path, 'wb') as f:
-                faiss.write_index(self.index, f)
+            # Сохраняем индекс
+            faiss.write_index(self.index, self.index_path)
+            logger.info(f"Индекс сохранен в {self.index_path}")
+
+            # Сохраняем документы
             with open(self.documents_path, 'wb') as f:
                 pickle.dump(self.documents, f)
-            logger.info("База данных успешно сохранена")
+            logger.info(f"Документы сохранены в {self.documents_path}")
             return True
         except Exception as e:
             logger.error(f"Ошибка при сохранении базы данных: {e}")
@@ -107,16 +119,20 @@ class VectorDB:
         """Поиск похожих документов"""
         try:
             if not query or not isinstance(query, str):
+                logger.error("Получен невалидный запрос для поиска")
                 return []
-
-            query_embedding = self.create_embedding(query)
-            query_embedding = np.array([query_embedding])
 
             if self.index.ntotal == 0:
                 logger.warning("База данных пуста")
                 return []
 
+            # Создаем эмбеддинг запроса
+            query_embedding = self.create_embedding(query)
+            query_embedding = np.array([query_embedding])
+
+            # Ищем похожие документы
             distances, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
+            logger.info(f"Найдено {len(indices[0])} документов для запроса")
 
             results = []
             for idx in indices[0]:
