@@ -44,6 +44,17 @@ def courses():
         flash('Ошибка при загрузке списка курсов', 'error')
         return redirect(url_for('admin.index'))
 
+@admin.route('/materials')
+def materials():
+    """Список всех материалов"""
+    try:
+        materials = Material.query.order_by(Material.created_at.desc()).all()
+        return render_template('admin/materials.html', materials=materials)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке списка материалов: {str(e)}")
+        flash('Ошибка при загрузке списка материалов', 'error')
+        return redirect(url_for('admin.index'))
+
 @admin.route('/files')
 def files():
     """Список всех файлов"""

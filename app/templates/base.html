@@ -23,12 +23,17 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.chat') }}">
-                            <i class="bi bi-chat-dots me-1"></i>Чат
+                            <i class="bi bi-chat-dots me-1"></i>Чат с ИИ
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.notifications') }}">
+                            <i class="bi bi-bell me-1"></i>Уведомления
                         </a>
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-gear me-1"></i>Управление
+                            <i class="bi bi-gear me-1"></i>Управление системой
                         </a>
                         <ul class="dropdown-menu">
                             <li>
@@ -47,16 +52,16 @@
                                 </a>
                             </li>
                             <li>
+                                <a class="dropdown-item" href="{{ url_for('admin.materials') }}">
+                                    <i class="bi bi-file-text me-2"></i>Учебные материалы
+                                </a>
+                            </li>
+                            <li>
                                 <a class="dropdown-item" href="{{ url_for('admin.files') }}">
-                                    <i class="bi bi-files me-2"></i>Файлы
+                                    <i class="bi bi-files me-2"></i>Файлы материалов
                                 </a>
                             </li>
                         </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.notifications') }}">
-                            <i class="bi bi-bell me-1"></i>Уведомления
-                        </a>
                     </li>
                 </ul>
             </div>
