@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Чат с ассистентом</h2>
-    
+
     <div class="row">
         <div class="col-md-3">
             <!-- Выбор курса -->
@@ -21,7 +21,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="col-md-9">
             <!-- Чат -->
             <div class="card">
@@ -35,7 +35,7 @@
                             <p>Выберите курс и задайте вопрос</p>
                         </div>
                     </div>
-                    
+
                     <!-- Форма отправки вопроса -->
                     <form id="questionForm" class="mt-3">
                         <div class="input-group">
@@ -49,25 +49,61 @@
     </div>
 </div>
 
+<!-- Стили для сообщений -->
+<style>
+.message {
+    margin-bottom: 1rem;
+}
+
+.message-user {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.message-assistant {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.message-content {
+    max-width: 75%;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+}
+
+.message-user .message-content {
+    background-color: var(--bs-primary);
+    color: white;
+}
+
+.message-assistant .message-content {
+    background-color: var(--bs-light);
+    color: var(--bs-dark);
+}
+</style>
+
 <!-- JavaScript для обработки чата -->
 <script>
     document.getElementById('questionForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const courseId = document.getElementById('courseSelect').value;
         const question = document.getElementById('questionInput').value;
-        
+
         if (!courseId) {
             alert('Пожалуйста, выберите курс');
             return;
         }
-        
+
         if (!question.trim()) {
             alert('Пожалуйста, введите вопрос');
             return;
         }
-        
+
         try {
+            // Добавляем сообщение пользователя в чат сразу после отправки
+            appendMessage(question, 'user');
+
             const response = await fetch('/chat/ask', {
                 method: 'POST',
                 headers: {
@@ -78,40 +114,13 @@
                     'question': question
                 })
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
-                // Добавляем вопрос и ответ в историю чата
-                const chatHistory = document.getElementById('chatHistory');
-                
-                // Добавляем вопрос пользователя
-                const questionDiv = document.createElement('div');
-                questionDiv.className = 'mb-3';
-                questionDiv.innerHTML = `
-                    <div class="d-flex justify-content-end">
-                        <div class="bg-primary text-white rounded p-2" style="max-width: 75%;">
-                            ${question}
-                        </div>
-                    </div>
-                `;
-                chatHistory.appendChild(questionDiv);
-                
                 // Добавляем ответ ассистента
-                const answerDiv = document.createElement('div');
-                answerDiv.className = 'mb-3';
-                answerDiv.innerHTML = `
-                    <div class="d-flex justify-content-start">
-                        <div class="bg-light rounded p-2" style="max-width: 75%;">
-                            ${data.answer}
-                        </div>
-                    </div>
-                `;
-                chatHistory.appendChild(answerDiv);
-                
-                // Прокручиваем чат вниз
-                chatHistory.scrollTop = chatHistory.scrollHeight;
-                
+                appendMessage(data.answer, 'assistant');
+
                 // Очищаем поле ввода
                 document.getElementById('questionInput').value = '';
             } else {
@@ -122,5 +131,18 @@
             alert('Произошла ошибка при отправке вопроса');
         }
     });
+
+    function appendMessage(text, role) {
+        const chatHistory = document.getElementById('chatHistory');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-${role}`;
+        messageDiv.innerHTML = `
+            <div class="message-content">
+                ${text}
+            </div>
+        `;
+        chatHistory.appendChild(messageDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
 </script>
 {% endblock %}
