@@ -137,35 +137,30 @@ class CourseBot:
                 await message.reply("🔍 Ищу ответ на ваш вопрос...")
 
                 try:
+                    # Получаем ответ через GigaChat
                     answer = answer_question(question, self.vector_db_path)
 
+                    # Создаем клавиатуру для дальнейших действий
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="📝 Задать новый вопрос", callback_data="ask_new_question")],
                         [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
                     ])
 
-                    if "К сожалению, я не нашел информации" in answer:
-                        await message.reply(
-                            "❌ К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
-                            "💡 Попробуйте переформулировать вопрос или выбрать другой курс.",
-                            reply_markup=keyboard
-                        )
-                        return
-
+                    # Форматируем полный ответ
                     full_response = (
-                        f"📚 <b>Результаты поиска по курсу</b>\n"
-                        f"<i>{course.title}</i>\n\n"
+                        f"📚 <b>Курс:</b> {course.title}\n\n"
                         f"❓ <b>Ваш вопрос:</b>\n{question}\n\n"
-                        f"🔍 <b>Ответ:</b>\n{answer}"
+                        f"🤖 <b>Ответ:</b>\n{answer}"
                     )
 
+                    # Отправляем ответ с разбиением на части при необходимости
                     await self.send_split_message(
                         chat_id=message.chat.id,
                         text=full_response,
                         parse_mode="HTML",
                         reply_markup=keyboard
                     )
-                    logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
+                    logger.info(f"Успешно отправлен ответ для пользователя {message.from_user.id}")
 
                 except Exception as e:
                     logger.error(f"Error processing question: {str(e)}", exc_info=True)
@@ -177,7 +172,7 @@ class CourseBot:
                 self.user_states.pop(user_id, None)
 
         except Exception as e:
-            logger.error(f"Error processing question: {e}", exc_info=True)
+            logger.error(f"Error in process_question: {str(e)}", exc_info=True)
             await message.reply("❌ Произошла ошибка при обработке вашего вопроса")
             if user_id in locals():
                 self.user_states.pop(user_id, None)
