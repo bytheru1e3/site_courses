@@ -17,7 +17,7 @@ class FileProcessor:
         # Initialize VectorDB with specific paths for index and documents
         self.vector_db = VectorDB(
             index_path=os.path.join(vector_db_path, "vector_index.faiss"),
-            documents_path=os.path.join(vector_db_path, "documents.pkl")
+            documents_path=os.path.join(vector_db_path, "documents.json")
         )
         logger.info(f"FileProcessor initialized with vector DB path: {vector_db_path}")
 

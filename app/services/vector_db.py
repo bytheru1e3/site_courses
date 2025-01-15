@@ -1,5 +1,5 @@
 import os
-import pickle
+import json
 import faiss
 import numpy as np
 import logging
@@ -48,8 +48,8 @@ class VectorDB:
 
             if os.path.exists(self.documents_path):
                 try:
-                    with open(self.documents_path, 'rb') as f:
-                        self.documents = pickle.load(f)
+                    with open(self.documents_path, 'r', encoding='utf-8') as f:
+                        self.documents = json.load(f)
                     logger.info(f"Successfully loaded documents, count: {len(self.documents)}")
                 except Exception as e:
                     logger.error(f"Error reading documents: {str(e)}")
@@ -73,10 +73,10 @@ class VectorDB:
                 logger.error(f"Error saving index: {e}\n{traceback.format_exc()}")
                 return False
 
-            # Сохраняем документы
+            # Сохраняем документы в JSON формате
             try:
-                with open(self.documents_path, 'wb') as f:
-                    pickle.dump(self.documents, f)
+                with open(self.documents_path, 'w', encoding='utf-8') as f:
+                    json.dump(self.documents, f, ensure_ascii=False, indent=2)
                 logger.info(f"Documents saved to {self.documents_path}")
             except Exception as e:
                 logger.error(f"Error saving documents: {e}\n{traceback.format_exc()}")

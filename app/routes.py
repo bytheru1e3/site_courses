@@ -17,11 +17,49 @@ def index():
     """
     try:
         courses = Course.query.all()
-        return render_template('course.html', courses=courses)
+        return render_template('course/index.html', courses=courses)
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка курсов: {str(e)}")
         flash('Произошла ошибка при загрузке данных', 'error')
-        return render_template('course.html', courses=[])
+        return render_template('course/index.html', courses=[])
+
+@main.route('/course/<int:course_id>')
+def course(course_id):
+    """Просмотр курса"""
+    try:
+        course = Course.query.get_or_404(course_id)
+        return render_template('course/view.html', course=course)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке курса: {str(e)}")
+        flash('Произошла ошибка при загрузке курса', 'error')
+        return redirect(url_for('main.index'))
+
+@main.route('/add_course', methods=['POST'])
+def add_course():
+    """Добавление нового курса"""
+    try:
+        title = request.form.get('title')
+        description = request.form.get('description', '')
+
+        if not title:
+            flash('Название курса обязательно', 'error')
+            return redirect(url_for('main.index'))
+
+        new_course = Course(
+            title=title,
+            description=description
+        )
+        db.session.add(new_course)
+        db.session.commit()
+
+        flash('Курс успешно создан', 'success')
+        return redirect(url_for('main.index'))
+
+    except Exception as e:
+        logger.error(f"Ошибка при создании курса: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при создании курса', 'error')
+        return redirect(url_for('main.index'))
 
 @main.route('/add_user', methods=['POST'])
 def add_user():
@@ -62,46 +100,6 @@ def add_user():
         db.session.rollback()
         flash('Произошла ошибка при создании пользователя', 'error')
         return redirect(url_for('main.index'))
-
-@main.route('/add_course', methods=['POST'])
-def add_course():
-    """Добавление нового курса"""
-    try:
-        title = request.form.get('title')
-        description = request.form.get('description', '')
-
-        if not title:
-            flash('Название курса обязательно', 'error')
-            return redirect(url_for('main.index'))
-
-        # Получаем админа из базы
-        admin = User.query.filter_by(username='admin').first()
-        if not admin:
-            flash('Ошибка: админ не найден', 'error')
-            return redirect(url_for('main.index'))
-
-        new_course = Course(
-            title=title,
-            description=description,
-            user_id=admin.id
-        )
-        db.session.add(new_course)
-        db.session.commit()
-
-        flash('Курс успешно создан', 'success')
-        return redirect(url_for('main.index'))
-
-    except Exception as e:
-        logger.error(f"Ошибка при создании курса: {str(e)}")
-        db.session.rollback()
-        flash('Произошла ошибка при создании курса', 'error')
-        return redirect(url_for('main.index'))
-
-@main.route('/course/<int:course_id>')
-def course(course_id):
-    """Просмотр курса"""
-    course = Course.query.get_or_404(course_id)
-    return render_template('course/view.html', course=course)
 
 @main.route('/course/<int:course_id>/add_material', methods=['POST'])
 def add_material(course_id):
@@ -245,14 +243,14 @@ def delete_course(course_id):
 
 @main.route('/material/<int:material_id>')
 def material(material_id):
-    """Просмотр отдельного материала"""
+    """Просмотр материала"""
     try:
         material = Material.query.get_or_404(material_id)
         return render_template('material.html', material=material)
     except Exception as e:
         logger.error(f"Ошибка при загрузке материала: {str(e)}")
         flash('Произошла ошибка при загрузке материала', 'error')
-        return redirect(url_for('main.course', course_id=material.course_id))
+        return redirect(url_for('main.index'))
 
 @main.route('/material/<int:material_id>/upload_file', methods=['POST'])
 def upload_file(material_id):
