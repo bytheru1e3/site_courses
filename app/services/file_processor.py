@@ -4,6 +4,7 @@ import PyPDF2
 import logging
 from typing import List, Dict, Any
 from app.services.vector_db import VectorDB
+import mammoth
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,8 @@ class FileProcessor:
                 logger.warning(f"No text content extracted from file: {file_path}")
                 return False
 
+            logger.info(f"Extracted {len(documents)} documents from file")
+
             # Add each document chunk to vector database
             success_count = 0
             for idx, doc in enumerate(documents):
@@ -57,45 +60,33 @@ class FileProcessor:
         """Extract text from DOCX file in chunks"""
         try:
             chunks = []
-            doc = Document(file_path)
+            # Используем mammoth для извлечения текста
+            with open(file_path, "rb") as docx_file:
+                result = mammoth.extract_raw_text(docx_file)
+                text = result.value
 
-            current_chunk = []
-            current_length = 0
-            max_chunk_size = 1000  # Characters per chunk
+                # Разбиваем текст на чанки
+                current_chunk = []
+                current_length = 0
+                max_chunk_size = 1000  # Characters per chunk
 
-            # Process paragraphs
-            for paragraph in doc.paragraphs:
-                text = paragraph.text.strip()
-                if not text:
-                    continue
+                paragraphs = text.split('\n\n')
+                for paragraph in paragraphs:
+                    paragraph = paragraph.strip()
+                    if not paragraph:
+                        continue
 
-                if current_length + len(text) > max_chunk_size and current_chunk:
+                    if current_length + len(paragraph) > max_chunk_size and current_chunk:
+                        chunks.append(' '.join(current_chunk))
+                        current_chunk = []
+                        current_length = 0
+
+                    current_chunk.append(paragraph)
+                    current_length += len(paragraph)
+
+                # Add remaining text if any
+                if current_chunk:
                     chunks.append(' '.join(current_chunk))
-                    current_chunk = []
-                    current_length = 0
-
-                current_chunk.append(text)
-                current_length += len(text)
-
-            # Process tables
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        text = cell.text.strip()
-                        if not text:
-                            continue
-
-                        if current_length + len(text) > max_chunk_size and current_chunk:
-                            chunks.append(' '.join(current_chunk))
-                            current_chunk = []
-                            current_length = 0
-
-                        current_chunk.append(text)
-                        current_length += len(text)
-
-            # Add remaining text if any
-            if current_chunk:
-                chunks.append(' '.join(current_chunk))
 
             logger.info(f"Extracted {len(chunks)} chunks from DOCX file")
             return chunks
