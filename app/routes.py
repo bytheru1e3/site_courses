@@ -17,11 +17,44 @@ def index():
     """
     try:
         courses = Course.query.all()
-        return render_template('course/index.html', courses=courses)
+        return render_template('admin/courses.html', courses=courses)
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка курсов: {str(e)}")
         flash('Произошла ошибка при загрузке данных', 'error')
-        return render_template('course/index.html', courses=[])
+        return render_template('admin/courses.html', courses=[])
+
+@main.route('/users')
+def users():
+    """Страница управления пользователями"""
+    try:
+        users = User.query.all()
+        return render_template('admin/users.html', users=users)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке списка пользователей: {str(e)}")
+        flash('Произошла ошибка при загрузке данных', 'error')
+        return render_template('admin/users.html', users=[])
+
+@main.route('/materials')
+def materials():
+    """Страница управления материалами"""
+    try:
+        materials = Material.query.all()
+        return render_template('admin/materials.html', materials=materials)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке списка материалов: {str(e)}")
+        flash('Произошла ошибка при загрузке данных', 'error')
+        return render_template('admin/materials.html', materials=[])
+
+@main.route('/files')
+def files():
+    """Страница управления файлами"""
+    try:
+        files = MaterialFile.query.all()
+        return render_template('admin/files.html', files=files)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке списка файлов: {str(e)}")
+        flash('Произошла ошибка при загрузке данных', 'error')
+        return render_template('admin/files.html', files=[])
 
 @main.route('/course/<int:course_id>')
 def course(course_id):
