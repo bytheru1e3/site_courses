@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 class FileProcessor:
     def __init__(self, vector_db_path: str):
         """Initialize FileProcessor with vector database path"""
+        # Create directories if they don't exist
+        os.makedirs(vector_db_path, exist_ok=True)
+
         self.vector_db = VectorDB(
             os.path.join(vector_db_path, "vector_index.faiss"),
             os.path.join(vector_db_path, "documents.json")
@@ -47,7 +50,7 @@ class FileProcessor:
             return success_count > 0
 
         except Exception as e:
-            logger.error(f"Error processing file {file_path}: {str(e)}")
+            logger.error(f"Error processing file {file_path}: {str(e)}", exc_info=True)
             return False
 
     def _process_docx(self, file_path: str) -> List[str]:
@@ -60,20 +63,37 @@ class FileProcessor:
             current_length = 0
             max_chunk_size = 1000  # Characters per chunk
 
+            # Process paragraphs
             for paragraph in doc.paragraphs:
                 text = paragraph.text.strip()
                 if not text:
                     continue
 
-                if current_length + len(text) > max_chunk_size:
-                    if current_chunk:
-                        chunks.append(' '.join(current_chunk))
-                    current_chunk = [text]
-                    current_length = len(text)
-                else:
-                    current_chunk.append(text)
-                    current_length += len(text)
+                if current_length + len(text) > max_chunk_size and current_chunk:
+                    chunks.append(' '.join(current_chunk))
+                    current_chunk = []
+                    current_length = 0
 
+                current_chunk.append(text)
+                current_length += len(text)
+
+            # Process tables
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        text = cell.text.strip()
+                        if not text:
+                            continue
+
+                        if current_length + len(text) > max_chunk_size and current_chunk:
+                            chunks.append(' '.join(current_chunk))
+                            current_chunk = []
+                            current_length = 0
+
+                        current_chunk.append(text)
+                        current_length += len(text)
+
+            # Add remaining text if any
             if current_chunk:
                 chunks.append(' '.join(current_chunk))
 
@@ -81,7 +101,7 @@ class FileProcessor:
             return chunks
 
         except Exception as e:
-            logger.error(f"Error processing DOCX file {file_path}: {str(e)}")
+            logger.error(f"Error processing DOCX file {file_path}: {str(e)}", exc_info=True)
             return []
 
     def _process_pdf(self, file_path: str) -> List[str]:
@@ -99,16 +119,19 @@ class FileProcessor:
                     if not text:
                         continue
 
-                    words = text.split()
-                    for word in words:
-                        if current_length + len(word) > max_chunk_size:
-                            if current_chunk:
-                                chunks.append(' '.join(current_chunk))
-                            current_chunk = [word]
-                            current_length = len(word)
-                        else:
-                            current_chunk.append(word)
-                            current_length += len(word)
+                    paragraphs = text.split('\n\n')
+                    for paragraph in paragraphs:
+                        paragraph = paragraph.strip()
+                        if not paragraph:
+                            continue
+
+                        if current_length + len(paragraph) > max_chunk_size and current_chunk:
+                            chunks.append(' '.join(current_chunk))
+                            current_chunk = []
+                            current_length = 0
+
+                        current_chunk.append(paragraph)
+                        current_length += len(paragraph)
 
                 if current_chunk:
                     chunks.append(' '.join(current_chunk))
@@ -117,7 +140,7 @@ class FileProcessor:
             return chunks
 
         except Exception as e:
-            logger.error(f"Error processing PDF file {file_path}: {str(e)}")
+            logger.error(f"Error processing PDF file {file_path}: {str(e)}", exc_info=True)
             return []
 
     def search_similar_documents(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
@@ -128,5 +151,5 @@ class FileProcessor:
             logger.info(f"Found {len(results)} similar documents")
             return results
         except Exception as e:
-            logger.error(f"Error searching documents: {str(e)}")
+            logger.error(f"Error searching documents: {str(e)}", exc_info=True)
             return []

@@ -238,12 +238,12 @@ def upload_file(material_id):
         material = Material.query.get_or_404(material_id)
         if 'file' not in request.files:
             flash('Файл не выбран', 'error')
-            return redirect(url_for('main.material', material_id=material.id))
+            return redirect(url_for('main.course', course_id=material.course_id))
 
         file = request.files['file']
         if file.filename == '':
             flash('Файл не выбран', 'error')
-            return redirect(url_for('main.material', material_id=material.id))
+            return redirect(url_for('main.course', course_id=material.course_id))
 
         if file:
             filename = secure_filename(file.filename)
@@ -252,7 +252,7 @@ def upload_file(material_id):
 
             if file_type not in ['pdf', 'docx']:
                 flash('Неподдерживаемый тип файла. Разрешены только PDF и DOCX', 'error')
-                return redirect(url_for('main.material', material_id=material.id))
+                return redirect(url_for('main.course', course_id=material.course_id))
 
             # Создаем директорию для файлов материала если её нет
             file_dir = os.path.join(os.getcwd(), 'app', 'uploads', str(material_id))
@@ -272,24 +272,28 @@ def upload_file(material_id):
             db.session.add(material_file)
             db.session.commit()
 
-            # Инициализируем FileProcessor и индексируем файл
-            vector_db_path = os.path.join(os.getcwd(), "app", "data")
-            file_processor = FileProcessor(vector_db_path)
+            try:
+                # Инициализируем FileProcessor и индексируем файл
+                vector_db_path = os.path.join(os.getcwd(), "app", "data")
+                file_processor = FileProcessor(vector_db_path)
 
-            if file_processor.process_file(file_path):
-                material_file.is_indexed = True
-                db.session.commit()
-                flash('Файл успешно загружен и проиндексирован', 'success')
-            else:
+                if file_processor.process_file(file_path):
+                    material_file.is_indexed = True
+                    db.session.commit()
+                    flash('Файл успешно загружен и проиндексирован', 'success')
+                else:
+                    flash('Файл загружен, но возникла ошибка при индексации', 'warning')
+            except Exception as e:
+                logger.error(f"Ошибка при индексации файла: {str(e)}", exc_info=True)
                 flash('Файл загружен, но возникла ошибка при индексации', 'warning')
 
-            return redirect(url_for('main.material', material_id=material.id))
+            return redirect(url_for('main.course', course_id=material.course_id))
 
     except Exception as e:
-        logger.error(f"Ошибка при загрузке файла: {str(e)}")
+        logger.error(f"Ошибка при загрузке файла: {str(e)}", exc_info=True)
         db.session.rollback()
         flash('Произошла ошибка при загрузке файла', 'error')
-        return redirect(url_for('main.material', material_id=material.id))
+        return redirect(url_for('main.course', course_id=material.course_id))
 
 @main.route('/file/<int:file_id>/download')
 def download_file(file_id):
