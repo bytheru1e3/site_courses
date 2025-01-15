@@ -17,30 +17,8 @@ def create_app():
 
     # Загрузка конфигурации
     app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "your-secret-key")
-
-    # Настройка подключения к базе данных с SSL параметрами
-    db_url = os.environ.get("DATABASE_URL")
-    if db_url:
-        # Добавляем параметры SSL и пула соединений
-        if '?' in db_url:
-            db_url += '&'
-        else:
-            db_url += '?'
-        db_url += 'sslmode=require'
-
-    app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        'pool_pre_ping': True,  # Проверка соединения перед использованием
-        'pool_recycle': 280,    # Пересоздание соединений каждые 280 секунд
-        'pool_timeout': 30,     # Таймаут ожидания соединения из пула
-        'pool_size': 30,        # Максимальный размер пула
-        'max_overflow': 10,     # Максимальное количество дополнительных соединений
-        'connect_args': {
-            'sslmode': 'require',
-            'connect_timeout': 10
-        }
-    }
 
     # Инициализация расширений
     db.init_app(app)
