@@ -141,47 +141,87 @@ def generate_document_id(file_path: str, text: str, index: int) -> str:
     return f"{file_path}_{index}_{text_hash}"
 
 def add_file_to_vector_db(file_path: str, save_path: str) -> bool:
-    """Обработать файл и добавить его содержимое в векторную базу данных"""
+    """
+    Обработать файл и добавить его содержимое в векторную базу данных
+    """
     try:
         logger.info(f"Начало обработки файла для добавления в векторную БД: {file_path}")
         os.makedirs(save_path, exist_ok=True)
 
+        # Загружаем и обрабатываем файл в зависимости от его типа
         from app.file_processing import process_file
-        documents = process_file(file_path)
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        from langchain_core.documents import Document
 
-        if not documents:
-            logger.error(f"Не удалось извлечь документы из файла: {file_path}")
+        # Получаем текст из файла
+        raw_documents = process_file(file_path)
+        if not raw_documents:
+            logger.error(f"Не удалось извлечь текст из файла: {file_path}")
             return False
 
-        logger.info(f"Извлечено {len(documents)} документов из файла")
+        logger.info(f"Успешно извлечен текст из файла")
 
+        # Разделяем текст на фрагменты
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500,
+            chunk_overlap=50,
+            length_function=len,
+            separators=["\n\n", "\n", " ", ""]
+        )
+
+        documents = []
+        for doc in raw_documents:
+            if isinstance(doc, str):
+                text = doc
+            else:
+                text = doc.get('text', '')
+
+            if text:
+                # Создаем документы langchain с метаданными
+                split_docs = text_splitter.split_text(text)
+                for i, split_text in enumerate(split_docs):
+                    doc_id = generate_document_id(file_path, split_text, i)
+                    documents.append(
+                        Document(
+                            page_content=split_text,
+                            metadata={
+                                'source': file_path,
+                                'chunk_id': i,
+                                'doc_id': doc_id
+                            }
+                        )
+                    )
+
+        if not documents:
+            logger.error("Не удалось создать документы для векторной БД")
+            return False
+
+        logger.info(f"Создано {len(documents)} документов для добавления в векторную БД")
+
+        # Инициализируем или получаем векторную БД
         vector_db = VectorDB(
             os.path.join(save_path, "vector_index.faiss"),
             os.path.join(save_path, "documents.json")
         )
 
+        # Добавляем документы в векторную БД
         success_count = 0
-        for idx, doc in enumerate(documents):
+        for doc in documents:
             try:
-                if isinstance(doc, str):
-                    text = doc
-                else:
-                    text = doc.get('text', '')
-
-                if text:
-                    document_id = generate_document_id(file_path, text, idx)
-                    if vector_db.add_document(text, document_id):
-                        success_count += 1
-                        logger.info(f"Документ {idx + 1}/{len(documents)} успешно добавлен")
-                    else:
-                        logger.warning(f"Не удалось добавить документ {idx + 1}/{len(documents)}")
+                if vector_db.add_document(
+                    doc.page_content,
+                    doc.metadata['doc_id'],
+                    metadata=doc.metadata
+                ):
+                    success_count += 1
+                    logger.info(f"Документ {success_count}/{len(documents)} успешно добавлен")
             except Exception as e:
-                logger.error(f"Ошибка при добавлении документа {idx + 1}: {str(e)}")
+                logger.error(f"Ошибка при добавлении документа: {str(e)}")
                 continue
 
         logger.info(f"Успешно добавлено {success_count} из {len(documents)} документов в векторную БД")
         return success_count > 0
 
     except Exception as e:
-        logger.error(f"Ошибка в add_file_to_vector_db: {str(e)}")
+        logger.error(f"Ошибка в add_file_to_vector_db: {str(e)}", exc_info=True)
         return False

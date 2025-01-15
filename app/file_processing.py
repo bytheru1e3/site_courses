@@ -28,7 +28,7 @@ def process_file(file_path: str) -> List[Dict[str, Any]]:
             return []
 
     except Exception as e:
-        logger.error(f"Ошибка при обработке файла {file_path}: {str(e)}")
+        logger.error(f"Ошибка при обработке файла {file_path}: {str(e)}", exc_info=True)
         return []
 
 def process_pdf(file_path: str) -> List[Dict[str, Any]]:
@@ -49,7 +49,8 @@ def process_pdf(file_path: str) -> List[Dict[str, Any]]:
                             documents.append({
                                 'text': text.strip(),
                                 'page': page_num + 1,
-                                'source': file_path
+                                'source': file_path,
+                                'type': 'pdf'
                             })
                             logger.debug(f"Успешно обработана страница {page_num + 1}")
                     except Exception as page_error:
@@ -72,19 +73,48 @@ def process_docx(file_path: str) -> List[Dict[str, Any]]:
         doc = Document(file_path)
         logger.info(f"Начало обработки DOCX файла, всего параграфов: {len(doc.paragraphs)}")
 
+        current_section = ""
         for para_num, paragraph in enumerate(doc.paragraphs):
             try:
                 text = paragraph.text.strip()
                 if text:
+                    # Если это заголовок (определяем по стилю)
+                    if paragraph.style.name.startswith('Heading'):
+                        # Если был предыдущий раздел, сохраняем его
+                        if current_section:
+                            documents.append({
+                                'text': current_section,
+                                'paragraph': para_num,
+                                'source': file_path,
+                                'type': 'docx'
+                            })
+                        current_section = text + "\n"
+                    else:
+                        current_section += text + "\n"
+
+                # Каждые 5 параграфов создаем новый документ
+                if para_num % 5 == 0 and current_section:
                     documents.append({
-                        'text': text,
-                        'paragraph': para_num + 1,
-                        'source': file_path
+                        'text': current_section,
+                        'paragraph': para_num,
+                        'source': file_path,
+                        'type': 'docx'
                     })
-                    logger.debug(f"Успешно обработан параграф {para_num + 1}")
+                    current_section = ""
+
+                logger.debug(f"Успешно обработан параграф {para_num + 1}")
             except Exception as para_error:
                 logger.error(f"Ошибка при обработке параграфа {para_num + 1}: {str(para_error)}")
                 continue
+
+        # Добавляем последний раздел, если он есть
+        if current_section:
+            documents.append({
+                'text': current_section,
+                'paragraph': len(doc.paragraphs),
+                'source': file_path,
+                'type': 'docx'
+            })
 
         return documents
     except Exception as e:
