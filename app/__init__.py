@@ -48,10 +48,12 @@ def create_app():
         from app.routes import main
         from app.admin import admin
         from app.auth import auth
+        from app.api.telegram import telegram_api
 
         app.register_blueprint(main)
         app.register_blueprint(admin)
         app.register_blueprint(auth)
+        app.register_blueprint(telegram_api)
 
         # Создание администратора по умолчанию
         try:
