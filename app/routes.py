@@ -15,8 +15,19 @@ def index():
     """
     Главная страница с админ-панелью
     """
-    courses = Course.query.all()
-    return render_template('index.html', courses=courses)
+    try:
+        stats = {
+            'users_count': User.query.count(),
+            'courses_count': Course.query.count(),
+            'materials_count': Material.query.count(),
+            'files_count': MaterialFile.query.count()
+        }
+        courses = Course.query.all()
+        return render_template('admin/index.html', stats=stats, courses=courses)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке главной страницы: {str(e)}")
+        flash('Произошла ошибка при загрузке данных', 'error')
+        return render_template('admin/index.html', stats={}, courses=[])
 
 @main.route('/add_user', methods=['POST'])
 def add_user():
@@ -29,15 +40,15 @@ def add_user():
 
         if not all([username, email, password]):
             flash('Все поля обязательны для заполнения', 'error')
-            return redirect(url_for('admin.users'))
+            return redirect(url_for('main.index'))
 
         if User.query.filter_by(username=username).first():
             flash('Пользователь с таким именем уже существует', 'error')
-            return redirect(url_for('admin.users'))
+            return redirect(url_for('main.index'))
 
         if User.query.filter_by(email=email).first():
             flash('Пользователь с таким email уже существует', 'error')
-            return redirect(url_for('admin.users'))
+            return redirect(url_for('main.index'))
 
         new_user = User(
             username=username,
@@ -50,13 +61,13 @@ def add_user():
         db.session.commit()
 
         flash('Пользователь успешно создан', 'success')
-        return redirect(url_for('admin.users'))
+        return redirect(url_for('main.index'))
 
     except Exception as e:
         logger.error(f"Ошибка при создании пользователя: {str(e)}")
         db.session.rollback()
         flash('Произошла ошибка при создании пользователя', 'error')
-        return redirect(url_for('admin.users'))
+        return redirect(url_for('main.index'))
 
 @main.route('/add_course', methods=['POST'])
 def add_course():
@@ -69,9 +80,16 @@ def add_course():
             flash('Название курса обязательно', 'error')
             return redirect(url_for('main.index'))
 
+        # Получаем админа из базы
+        admin = User.query.filter_by(username='admin').first()
+        if not admin:
+            flash('Ошибка: админ не найден', 'error')
+            return redirect(url_for('main.index'))
+
         new_course = Course(
             title=title,
-            description=description
+            description=description,
+            user_id=admin.id
         )
         db.session.add(new_course)
         db.session.commit()
@@ -228,7 +246,7 @@ def delete_course(course_id):
         db.session.rollback()
         flash('Произошла ошибка при удалении курса', 'error')
 
-    return redirect(url_for('admin.courses'))
+    return redirect(url_for('main.index'))
 
 
 @main.route('/material/<int:material_id>/upload_file', methods=['POST'])
@@ -247,21 +265,18 @@ def upload_file(material_id):
 
         if file:
             filename = secure_filename(file.filename)
-            # Определяем тип файла по расширению
             file_type = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
 
             if file_type not in ['pdf', 'docx']:
                 flash('Неподдерживаемый тип файла. Разрешены только PDF и DOCX', 'error')
                 return redirect(url_for('main.material', material_id=material_id))
 
-            # Создаем директорию для файлов материала если её нет
             file_dir = os.path.join(os.getcwd(), 'app', 'uploads', str(material_id))
             os.makedirs(file_dir, exist_ok=True)
 
             file_path = os.path.join(file_dir, filename)
             file.save(file_path)
 
-            # Создаем запись о файле в БД
             material_file = MaterialFile(
                 filename=filename,
                 file_path=file_path,
@@ -273,7 +288,6 @@ def upload_file(material_id):
             db.session.commit()
 
             try:
-                # Инициализируем FileProcessor для обработки файла
                 vector_db_path = os.path.join(os.getcwd(), "app", "data")
                 file_processor = FileProcessor(vector_db_path)
 
