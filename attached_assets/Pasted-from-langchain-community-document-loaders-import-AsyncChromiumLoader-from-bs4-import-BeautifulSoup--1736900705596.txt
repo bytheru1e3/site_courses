@@ -1,0 +1,276 @@
+from langchain_community.document_loaders import AsyncChromiumLoader
+from bs4 import BeautifulSoup
+
+# Инициализируем загрузчик
+loader = AsyncChromiumLoader(["https://nplus1.ru/search?tags=871"])
+html = loader.load()
+articles = 'n1_climb_4 transition-colors duration-75 hover:text-main inline-block mb-10 sm:mb-5 font-spectral leading-24'
+with open('page.html', 'w') as f:
+  f.write(html[0].page_content)
+soup = BeautifulSoup(html[0].page_content, 'html.parser')
+links = []
+with open('links.txt', 'w') as f:
+  for link in soup.find_all('a', class_=articles):
+    print(link)
+    links.append(link['href'])
+    f.write(link['href']+' ')
+
+
+with open('links.txt') as f:
+  sources = f.read()
+
+print(sources.split())
+
+
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.retrievers import BM25Retriever, EnsembleRetriever
+from langchain.vectorstores.faiss import FAISS
+from langchain_core.documents import Document
+
+from langchain_community.document_loaders import WebBaseLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+
+loader = WebBaseLoader(sources.split())
+
+docs = loader.load()
+
+len(docs)
+
+"""Разделим тексты статей на фрагменты длиной 500 символов и перекрытием в 100 символов."""
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500,
+                                              chunk_overlap=100)
+split_docs = text_splitter.split_documents(docs)
+
+len(split_docs)
+
+split_docs[1]
+
+"""Создадим ретривер и векторное хранилище для врагментов текста.
+
+- [Рейтинг ретриверов для английского языка](https://huggingface.co/spaces/mteb/leaderboard)
+- [Рейтинг ретриверов для русского языка](https://github.com/avidale/encodechka#%D0%BB%D0%B8%D0%B4%D0%B5%D1%80%D0%B1%D0%BE%D1%80%D0%B4)
+- [Эмбеддинговая модель, которую используем в этом туториале](https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2)
+"""
+
+# Commented out IPython magic to ensure Python compatibility.
+# %%time
+model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+model_kwargs = {'device': 'cpu'}
+encode_kwargs = {'normalize_embeddings': False}
+embedding = HuggingFaceEmbeddings(model_name=model_name,
+                                  model_kwargs=model_kwargs,
+                                  encode_kwargs=encode_kwargs)
+
+vector_store = FAISS.from_documents(split_docs, embedding=embedding)
+
+"""Зададим параметры извлечения. В нашем случае установим, что на запрос должны возвращаться 5 фрагментов, наиболее близких по смыслу."""
+
+embedding_retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+
+"""## Создание генеративной части пайплайна и составление цепочки RAG системы
+
+Используем авторизационные данные для подключения к GigaChat API.
+"""
+
+
+auth = "MDMzOWVhYTgtMzBlZi00OTVhLTk2OTAtYjgyYjY0ODQzNTk3OmQyZGE0NzkxLTYxNzMtNGE2OS05OWJmLTExNGMzOGQzNmFkZA=="
+
+"""Импортируем необходимые компоненты"""
+
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chat_models.gigachat import GigaChat
+from langchain.chains import create_retrieval_chain
+
+"""Создадим объект `GigaChat` и подготовим промпт для вопросно-ответной системы."""
+
+llm = GigaChat(credentials=auth,
+              model='GigaChat:latest',
+               verify_ssl_certs=False,
+               profanity_check=False)
+prompt = ChatPromptTemplate.from_template('''Ответь на вопрос пользователя. \
+Используй при этом только информацию из контекста. Если в контексте нет \
+информации для ответа, сообщи об этом пользователю.
+Контекст: {context}
+Вопрос: {input}
+Ответ:'''
+)
+
+"""Создадим цепочку `create_stuff_documents_chain`, которая будет частью нашей вопросно-ответной цепочки. Это нужно, чтобы подавать фрагменты текстов из векторной БД в промпт языковой модели. Промпт представляет из себя форматированную строку, а франменты являются экземплярами класса `Document`. Чтобы не писать код по извлечению атрибута `page_content` из `Document`, используем цепочку `create_stuff_documents_chain`, где это автоматизировано."""
+
+document_chain = create_stuff_documents_chain(
+    llm=llm,
+    prompt=prompt
+    )
+
+"""А теперь создадим вопросно-ответную цепочку с помощью функции `create_retrieval_chain()`."""
+
+retrieval_chain = create_retrieval_chain(embedding_retriever, document_chain)
+
+"""## Запустим нашу вопросно-ответную систему
+
+Пусть RAG-система ответит на следующие 5 вопросов:
+- Какие космические аппараты запускал Китай к Луне?
+- Когда Хаббл вернулся к работе?
+- Какая есть информация о неудачных запусках?
+- Есть ли какая-то информация, связанная с именем древнегреческого математика?
+- Дай информацию, связанную с лазерами.
+"""
+
+q1 = 'Какие космические аппараты запускал Китай к Луне?'
+
+resp1 = retrieval_chain.invoke(
+    {'input': q1}
+)
+
+resp1
+
+q2 = 'Когда Хаббл вернулся к работе?'
+
+resp2 = retrieval_chain.invoke(
+    {'input': q2}
+)
+
+resp2
+
+q3 = 'Какая есть информация о неудачных запусках?'
+
+resp3 = retrieval_chain.invoke(
+    {'input': q3}
+)
+
+resp3
+
+q4 = 'Есть ли какая-то информация, связанная с именем древнегреческого математика?'
+
+resp4 = retrieval_chain.invoke(
+    {'input': q4}
+)
+
+resp4
+
+q5 = "Дай информацию, связанную с лазерами."
+
+resp5 = retrieval_chain.invoke(
+    {'input': q5}
+)
+
+resp5
+
+"""## Использование ретривера BM25
+
+Теперь для векторизации фрагментов и запроса пользователя используем более простую модель. Модели BM25 основана на векторизации TF-IDF. То есть в отличие от эмбеддинговой модели, где вектор представляет собой числовое представление семантического смысла, модели BM25 векторизируют текст по словам. Можно сказать, что поиск с помощью BM25 - это поиск по ключевым словам.
+
+Поскольку BM25 работает со словами, а не со смыслами, нужно как в классическом NLP выполнить предобработку текстов, чтобы уменьшить словарь.
+"""
+
+import string
+
+
+def tokenize(s):
+    return s.lower().translate(str.maketrans("", "", string.punctuation)).split(" ")
+
+bm25_retriever = BM25Retriever.from_documents(
+      documents=split_docs,
+      preprocess_func=tokenize,
+      k=5,
+  )
+
+bm25_retriever.get_relevant_documents(q5)
+
+bm25_chain = create_retrieval_chain(bm25_retriever, document_chain)
+
+resp5_2 = bm25_chain.invoke(
+    {'input': q5}
+)
+
+resp5_2
+
+resp4_2 = bm25_chain.invoke(
+    {'input': q4}
+)
+
+resp4_2
+
+resp3_2 = bm25_chain.invoke(
+    {'input': q3}
+)
+
+resp3_2
+
+resp2_2 = bm25_chain.invoke(
+    {'input': q2}
+)
+
+resp2_2
+
+resp1_2 = bm25_chain.invoke(
+    {'input': q1}
+)
+
+resp1_2
+
+"""## Сохранение ответов в файл
+
+В последующих туториалах мы попробуем оценить качество ответов, даваемых RAG-системой. Для этого сохраним их пока что в файл.
+"""
+
+rows = []
+results = [
+    resp1, resp2, resp3, resp4, resp5,
+    resp1_2, resp2_2, resp3_2, resp4_2, resp5_2,
+]
+for data in results:
+  for context in data['context']:
+    row = {
+        'input': data['input'],
+        'context': context.page_content,
+        'source': context.metadata['source'],
+        'title': context.metadata['title'],
+        'description': context.metadata['description'],
+        'language': context.metadata['language'],
+        'answer': data['answer']
+    }
+    rows.append(row)
+
+import pandas as pd
+df = pd.DataFrame(rows)
+
+df.to_csv('output.csv', index=False)
+
+"""## Вопросно-ответная система с двумя ретриверами
+Создадим гибрид, где два из пяти фрагментов будут извлекаться по эмбеддингам, а еще три по векторам, полученным с помощью модели BM25.
+"""
+
+embedding_retriever = vector_store.as_retriever(search_kwargs={"k": 2})
+bm25_retriever = BM25Retriever.from_documents(
+    documents=split_docs,
+    preprocess_func=tokenize,
+    k=3,
+)
+
+ensemble_retriever = EnsembleRetriever(
+    retrievers=[embedding_retriever, bm25_retriever],
+    weights=[0.4, 0.6],
+)
+
+from langchain.chains import RetrievalQA
+qa = RetrievalQA.from_chain_type(
+    llm=llm,
+    chain_type="stuff",
+    retriever=ensemble_retriever,
+    return_source_documents=True,
+)
+
+qa.invoke({"query": q1})
+
+qa.invoke({"query": q2})
+
+qa.invoke({"query": q3})
+
+qa.invoke({"query": q4})
+
+qa.invoke({"query": q5})
+

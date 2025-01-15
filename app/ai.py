@@ -5,11 +5,11 @@ import logging
 from typing import List, Dict, Any, Optional
 import json
 import hashlib
-import requests
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chat_models.gigachat import GigaChat
+from langchain.chains import create_retrieval_chain
 from app.services.vector_db import VectorDB
-import time
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
@@ -17,115 +17,55 @@ logger = logging.getLogger(__name__)
 model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
 
 class GigaChatAPI:
-    """Класс для работы с GigaChat API"""
-
+    """Класс для работы с GigaChat API через langchain"""
     def __init__(self):
-        self.api_key = os.environ.get('GIGACHAT_API_KEY')
+        self.api_key = os.environ.get("GIGACHAT_API_KEY", "")
         if not self.api_key:
             logger.error("GIGACHAT_API_KEY не найден в переменных окружения")
             raise ValueError("GIGACHAT_API_KEY не найден")
 
-        self.base_url = "https://gigachat.devices.sberbank.ru/api/v1"
-        self.token = None
+        # Инициализация GigaChat через langchain
+        self.llm = GigaChat(credentials=self.api_key,
+                           verify_ssl_certs=False,
+                           profanity_check=False)
 
-        # Setup retry strategy
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504]
-        )
-        self.session = requests.Session()
-        self.session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
+        # Создаем промпт-шаблон
+        self.prompt = ChatPromptTemplate.from_template("""Ответь на вопрос пользователя. \
+Используй при этом только информацию из контекста. Если в контексте нет \
+информации для ответа, сообщи об этом пользователю.
+Контекст: {context}
+Вопрос: {input}
+Ответ:""")
 
-    def _get_token(self) -> Optional[str]:
-        """Получение токена для доступа к API"""
+    def generate_response(self, question: str, context: str) -> str:
+        """
+        Генерация ответа с использованием GigaChat через langchain
+        """
         try:
-            headers = {
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-
-            response = self.session.post(
-                f"{self.base_url}/oauth/token",
-                headers=headers,
-                timeout=10
+            # Создаем цепочку документов
+            document_chain = create_stuff_documents_chain(
+                llm=self.llm,
+                prompt=self.prompt
             )
 
-            response.raise_for_status()
-            data = response.json()
-            return data.get('access_token')
+            # Преобразуем контекст для langchain
+            from langchain_core.documents import Document
+            documents = [Document(page_content=context)]
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Ошибка при получении токена: {str(e)}")
+            # Генерируем ответ
+            response = document_chain.invoke({
+                "input": question,
+                "context": documents
+            })
+
+            return response['answer']
+
+        except Exception as e:
+            logger.error(f"Ошибка при генерации ответа: {str(e)}", exc_info=True)
             raise
 
-    def generate_response(self, prompt: str, max_retries: int = 3) -> str:
-        """Генерация ответа с использованием GigaChat API"""
-        retry_count = 0
-        while retry_count < max_retries:
-            try:
-                if not self.token:
-                    self.token = self._get_token()
-
-                headers = {
-                    'Authorization': f'Bearer {self.token}',
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
-
-                data = {
-                    'model': 'GigaChat:latest',
-                    'messages': [
-                        {
-                            'role': 'system',
-                            'content': (
-                                'Ты - интеллектуальный помощник для обучающей платформы. '
-                                'Твоя задача - анализировать предоставленный контекст и '
-                                'формировать понятные, структурированные ответы на вопросы пользователей. '
-                                'Используй факты только из предоставленного контекста. '
-                                'Если информации недостаточно, честно признай это. '
-                                'Форматируй ответ так, чтобы он был легко читаем.'
-                            )
-                        },
-                        {
-                            'role': 'user',
-                            'content': prompt
-                        }
-                    ],
-                    'temperature': 0.7,
-                    'max_tokens': 1500
-                }
-
-                response = self.session.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=data,
-                    timeout=30
-                )
-
-                response.raise_for_status()
-                result = response.json()
-
-                if 'choices' in result and result['choices']:
-                    answer = result['choices'][0]['message']['content']
-                    logger.info("Успешно получен ответ от GigaChat API")
-                    return answer
-                else:
-                    logger.error("Неверный формат ответа от API")
-                    raise ValueError("Неверный формат ответа от API")
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Ошибка при запросе к GigaChat API (попытка {retry_count + 1}): {str(e)}")
-                retry_count += 1
-                if retry_count < max_retries:
-                    time.sleep(2 ** retry_count)  # Exponential backoff
-                    self.token = None  # Reset token on error
-                else:
-                    raise
-
-MAX_RESPONSE_LENGTH = 3000  # Maximum length for a single response message
-MAX_RESULTS = 2  # Limit number of results to keep response concise
+MAX_RESPONSE_LENGTH = 3000
+MAX_RESULTS = 2
 
 def get_embedding(text: str) -> np.ndarray:
     """Получить векторное представление текста"""
@@ -174,20 +114,10 @@ def answer_question(question: str, vector_db_path: str) -> str:
                 text = str(result).replace('\n', ' ').strip()
                 context += text + "\n\n"
 
-        # Формируем промпт для GigaChat
-        prompt = f"""
-Вопрос пользователя: {question}
-
-Контекст из материалов курса:
-{context}
-
-Пожалуйста, сформируй понятный и структурированный ответ на основе предоставленного контекста. 
-Используй только информацию из контекста. Если информации недостаточно, укажи это."""
-
         try:
-            # Получаем ответ от GigaChat
+            # Создаем экземпляр GigaChatAPI и получаем ответ
             gigachat = GigaChatAPI()
-            response = gigachat.generate_response(prompt)
+            response = gigachat.generate_response(question, context)
 
             # Обрезаем ответ, если он слишком длинный
             final_response = truncate_text(response)
@@ -196,7 +126,7 @@ def answer_question(question: str, vector_db_path: str) -> str:
             return final_response
 
         except Exception as e:
-            logger.error(f"Ошибка при работе с GigaChat API: {str(e)}")
+            logger.error(f"Ошибка при работе с GigaChat API: {str(e)}", exc_info=True)
             return ("Извините, произошла техническая ошибка при обработке вашего вопроса. "
                    "Мы работаем над её устранением. Пожалуйста, попробуйте позже.")
 
