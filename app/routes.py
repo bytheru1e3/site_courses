@@ -13,21 +13,15 @@ main = Blueprint('main', __name__)
 @main.route('/')
 def index():
     """
-    Главная страница с админ-панелью
+    Главная страница со списком курсов
     """
     try:
-        stats = {
-            'users_count': User.query.count(),
-            'courses_count': Course.query.count(),
-            'materials_count': Material.query.count(),
-            'files_count': MaterialFile.query.count()
-        }
         courses = Course.query.all()
-        return render_template('admin/index.html', stats=stats, courses=courses)
+        return render_template('course.html', courses=courses)
     except Exception as e:
-        logger.error(f"Ошибка при загрузке главной страницы: {str(e)}")
+        logger.error(f"Ошибка при загрузке списка курсов: {str(e)}")
         flash('Произошла ошибка при загрузке данных', 'error')
-        return render_template('admin/index.html', stats={}, courses=[])
+        return render_template('course.html', courses=[])
 
 @main.route('/add_user', methods=['POST'])
 def add_user():

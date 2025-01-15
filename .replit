@@ -21,7 +21,7 @@ args = "Telegram Bot"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Flask App"
+args = "Flask Server"
 
 [[workflows.workflow]]
 name = "Telegram Bot"
@@ -38,7 +38,7 @@ task = "shell.exec"
 args = "python run_bot.py"
 
 [[workflows.workflow]]
-name = "Flask App"
+name = "Flask Server"
 author = "agent"
 
 [workflows.workflow.metadata]
@@ -50,6 +50,7 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
+waitForPort = 5000
 
 [[ports]]
 localPort = 5000
