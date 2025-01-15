@@ -1,6 +1,5 @@
 import os
 import pickle
-import json
 import faiss
 import numpy as np
 import logging
@@ -88,19 +87,6 @@ class VectorDB:
             logger.error(f"Error saving database: {e}\n{traceback.format_exc()}")
             return False
 
-    def create_embedding(self, text):
-        """Create embedding for text using sentence-transformers"""
-        try:
-            if not text or not isinstance(text, str):
-                logger.error("Invalid text for embedding creation")
-                return None
-
-            embedding = self.model.encode([text])[0]
-            return embedding.astype('float32')
-        except Exception as e:
-            logger.error(f"Error creating embedding: {e}\n{traceback.format_exc()}")
-            return None
-
     def add_document(self, text, document_id):
         """Add document to index"""
         try:
@@ -108,48 +94,42 @@ class VectorDB:
                 logger.error(f"Invalid text for document {document_id}")
                 return False
 
-            # Проверяем, нет ли уже такого документа
-            if not any(doc.get('id') == document_id for doc in self.documents):
-                logger.info(f"Adding new document with ID: {document_id}")
+            # Создаем embedding
+            embedding = self.model.encode([text])[0]
+            if embedding is None:
+                logger.error(f"Failed to create embedding for document {document_id}")
+                return False
 
-                # Создаем embedding
-                embedding = self.create_embedding(text)
-                if embedding is None:
-                    logger.error(f"Failed to create embedding for document {document_id}")
-                    return False
+            # Проверяем размерность embedding
+            if embedding.shape[0] != self.embedding_dim:
+                logger.error(f"Wrong embedding dimension: {embedding.shape[0]}, expected {self.embedding_dim}")
+                return False
 
-                # Проверяем размерность embedding
-                if embedding.shape[0] != self.embedding_dim:
-                    logger.error(f"Wrong embedding dimension: {embedding.shape[0]}, expected {self.embedding_dim}")
-                    return False
+            # Добавляем документ в список
+            self.documents.append({
+                'id': document_id,
+                'text': text
+            })
 
-                # Добавляем документ в список
-                self.documents.append({
-                    'id': document_id,
-                    'text': text
-                })
+            try:
+                # Добавляем embedding в индекс
+                embedding_array = np.array([embedding]).astype('float32')
+                self.index.add(embedding_array)
+            except Exception as e:
+                logger.error(f"Error adding embedding to index: {e}\n{traceback.format_exc()}")
+                # Удаляем документ из списка, так как не удалось добавить в индекс
+                self.documents.pop()
+                return False
 
-                try:
-                    # Добавляем embedding в индекс
-                    embedding_array = np.array([embedding])
-                    self.index.add(embedding_array)
-                except Exception as e:
-                    logger.error(f"Error adding embedding to index: {e}\n{traceback.format_exc()}")
-                    # Удаляем документ из списка, так как не удалось добавить в индекс
-                    self.documents.pop()
-                    return False
+            # Сохраняем изменения
+            if not self.save():
+                # Если не удалось сохранить, откатываем изменения
+                self.documents.pop()
+                return False
 
-                # Сохраняем изменения
-                if not self.save():
-                    # Если не удалось сохранить, откатываем изменения
-                    self.documents.pop()
-                    return False
+            logger.info(f"Document {document_id} successfully added to database")
+            return True
 
-                logger.info(f"Document {document_id} successfully added to database")
-                return True
-            else:
-                logger.warning(f"Document {document_id} already exists in database")
-            return False
         except Exception as e:
             logger.error(f"Error adding document: {e}\n{traceback.format_exc()}")
             return False
@@ -166,12 +146,12 @@ class VectorDB:
                 return []
 
             # Создаем embedding запроса
-            query_embedding = self.create_embedding(query)
+            query_embedding = self.model.encode([query])[0]
             if query_embedding is None:
                 logger.error("Failed to create embedding for query")
                 return []
 
-            query_embedding = np.array([query_embedding])
+            query_embedding = np.array([query_embedding]).astype('float32')
 
             # Ищем похожие документы
             try:
@@ -209,7 +189,7 @@ class VectorDB:
 
                 # Переиндексируем оставшиеся документы
                 for doc in self.documents:
-                    embedding = self.create_embedding(doc['text'])
+                    embedding = self.model.encode([doc['text']])[0]
                     embedding_array = np.array([embedding]).astype('float32')
                     new_index.add(embedding_array)
 
