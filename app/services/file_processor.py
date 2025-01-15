@@ -2,143 +2,131 @@ import os
 from docx import Document
 import PyPDF2
 import logging
+from typing import List, Dict, Any
 from app.services.vector_db import VectorDB
 
 logger = logging.getLogger(__name__)
 
 class FileProcessor:
-    _vector_db = None
+    def __init__(self, vector_db_path: str):
+        """Initialize FileProcessor with vector database path"""
+        self.vector_db = VectorDB(
+            os.path.join(vector_db_path, "vector_index.faiss"),
+            os.path.join(vector_db_path, "documents.json")
+        )
+        logger.info(f"FileProcessor initialized with vector DB path: {vector_db_path}")
 
-    @classmethod
-    def get_vector_db(cls):
-        if cls._vector_db is None:
-            cls._vector_db = VectorDB()
-        return cls._vector_db
-
-    @staticmethod
-    def process_file(file_path):
-        """Извлекает текст из файла и создает векторное представление"""
+    def process_file(self, file_path: str) -> bool:
+        """Process and index a file into the vector database"""
         try:
-            logger.info(f"Начало обработки файла: {file_path}")
-
-            # Получаем расширение файла
+            logger.info(f"Processing file: {file_path}")
+            # Get file extension
             file_ext = os.path.splitext(file_path)[1].lower()
 
-            # Извлекаем текст в зависимости от типа файла
-            text = ""
-            try:
-                if file_ext == '.docx':
-                    text = FileProcessor._process_docx(file_path)
-                elif file_ext == '.pdf':
-                    text = FileProcessor._process_pdf(file_path)
-                else:
-                    raise ValueError(f"Неподдерживаемый тип файла: {file_ext}")
+            # Extract text based on file type
+            if file_ext == '.docx':
+                documents = self._process_docx(file_path)
+            elif file_ext == '.pdf':
+                documents = self._process_pdf(file_path)
+            else:
+                raise ValueError(f"Unsupported file type: {file_ext}")
 
-                if not text.strip():
-                    raise ValueError("Не удалось извлечь текст из файла")
+            if not documents:
+                logger.warning(f"No text content extracted from file: {file_path}")
+                return False
 
-                logger.info(f"Текст успешно извлечен из файла {file_path}")
+            # Add each document chunk to vector database
+            success_count = 0
+            for idx, doc in enumerate(documents):
+                document_id = f"{file_path}_{idx}"
+                if self.vector_db.add_document(doc, document_id):
+                    success_count += 1
+                    logger.info(f"Successfully added document chunk {idx + 1}")
 
-            except Exception as e:
-                logger.error(f"Ошибка при извлечении текста из файла {file_path}: {str(e)}")
-                return None
-
-            # Создаем векторное представление и добавляем в базу
-            try:
-                vector_db = FileProcessor.get_vector_db()
-                logger.info(f"Создание векторного представления для файла {file_path}")
-
-                vector = vector_db.create_embedding(text)
-                if not vector:
-                    logger.error(f"Не удалось создать векторное представление для файла {file_path}")
-                    return None
-
-                logger.info(f"Векторное представление создано для файла {file_path}")
-
-                # Добавляем документ в векторную базу
-                if vector_db.add_document(text, file_path):
-                    logger.info(f"Файл {file_path} успешно добавлен в векторную базу")
-                    return vector
-                else:
-                    logger.error(f"Не удалось добавить файл {file_path} в векторную базу")
-                    return None
-
-            except Exception as e:
-                logger.error(f"Ошибка при создании векторного представления: {str(e)}")
-                return None
+            logger.info(f"Successfully processed {success_count} chunks from {file_path}")
+            return success_count > 0
 
         except Exception as e:
-            logger.error(f"Ошибка при обработке файла {file_path}: {str(e)}")
-            return None
+            logger.error(f"Error processing file {file_path}: {str(e)}")
+            return False
 
-    @staticmethod
-    def _process_docx(file_path):
-        """Извлекает текст из DOCX файла"""
+    def _process_docx(self, file_path: str) -> List[str]:
+        """Extract text from DOCX file in chunks"""
         try:
-            logger.info(f"Начало обработки DOCX файла: {file_path}")
-            text_parts = []
+            chunks = []
             doc = Document(file_path)
 
-            # Извлекаем текст из параграфов
+            current_chunk = []
+            current_length = 0
+            max_chunk_size = 1000  # Characters per chunk
+
             for paragraph in doc.paragraphs:
-                if paragraph.text.strip():
-                    text_parts.append(paragraph.text)
+                text = paragraph.text.strip()
+                if not text:
+                    continue
 
-            # Извлекаем текст из таблиц
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        if cell.text.strip():
-                            text_parts.append(cell.text)
+                if current_length + len(text) > max_chunk_size:
+                    if current_chunk:
+                        chunks.append(' '.join(current_chunk))
+                    current_chunk = [text]
+                    current_length = len(text)
+                else:
+                    current_chunk.append(text)
+                    current_length += len(text)
 
-            text = '\n'.join(text_parts)
-            if not text.strip():
-                logger.warning(f"DOCX файл {file_path} не содержит текста")
-                return ""
+            if current_chunk:
+                chunks.append(' '.join(current_chunk))
 
-            logger.info(f"DOCX файл {file_path} успешно обработан")
-            return text
+            logger.info(f"Extracted {len(chunks)} chunks from DOCX file")
+            return chunks
 
         except Exception as e:
-            logger.error(f"Ошибка при обработке DOCX файла {file_path}: {str(e)}")
-            raise
+            logger.error(f"Error processing DOCX file {file_path}: {str(e)}")
+            return []
 
-    @staticmethod
-    def _process_pdf(file_path):
-        """Извлекает текст из PDF файла"""
+    def _process_pdf(self, file_path: str) -> List[str]:
+        """Extract text from PDF file in chunks"""
         try:
-            logger.info(f"Начало обработки PDF файла: {file_path}")
-            text_parts = []
-
+            chunks = []
             with open(file_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
+                current_chunk = []
+                current_length = 0
+                max_chunk_size = 1000  # Characters per chunk
 
                 for page in pdf_reader.pages:
                     text = page.extract_text()
-                    if text.strip():
-                        text_parts.append(text)
+                    if not text:
+                        continue
 
-            text = '\n'.join(text_parts)
-            if not text.strip():
-                logger.warning(f"PDF файл {file_path} не содержит текста")
-                return ""
+                    words = text.split()
+                    for word in words:
+                        if current_length + len(word) > max_chunk_size:
+                            if current_chunk:
+                                chunks.append(' '.join(current_chunk))
+                            current_chunk = [word]
+                            current_length = len(word)
+                        else:
+                            current_chunk.append(word)
+                            current_length += len(word)
 
-            logger.info(f"PDF файл {file_path} успешно обработан")
-            return text
+                if current_chunk:
+                    chunks.append(' '.join(current_chunk))
+
+            logger.info(f"Extracted {len(chunks)} chunks from PDF file")
+            return chunks
 
         except Exception as e:
-            logger.error(f"Ошибка при обработке PDF файла {file_path}: {str(e)}")
-            raise
+            logger.error(f"Error processing PDF file {file_path}: {str(e)}")
+            return []
 
-    @staticmethod
-    def search_similar_documents(query, top_k=3):
-        """Поиск похожих документов"""
+    def search_similar_documents(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+        """Search for similar documents in the vector database"""
         try:
-            logger.info(f"Поиск документов по запросу: {query}")
-            vector_db = FileProcessor.get_vector_db()
-            results = vector_db.search(query, top_k)
-            logger.info(f"Найдено {len(results)} документов")
+            logger.info(f"Searching for documents similar to query: {query}")
+            results = self.vector_db.search(query, top_k=top_k)
+            logger.info(f"Found {len(results)} similar documents")
             return results
         except Exception as e:
-            logger.error(f"Ошибка при поиске документов: {str(e)}")
+            logger.error(f"Error searching documents: {str(e)}")
             return []
