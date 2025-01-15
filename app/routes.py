@@ -67,6 +67,55 @@ def course(course_id):
         flash('Произошла ошибка при загрузке курса', 'error')
         return redirect(url_for('main.index'))
 
+@main.route('/course/<int:course_id>/edit', methods=['POST'])
+def edit_course(course_id):
+    """Редактирование курса"""
+    try:
+        course = Course.query.get_or_404(course_id)
+        title = request.form.get('title')
+        description = request.form.get('description', '')
+
+        if not title:
+            flash('Название курса обязательно', 'error')
+            return redirect(url_for('main.course', course_id=course_id))
+
+        course.title = title
+        course.description = description
+        db.session.commit()
+
+        flash('Курс успешно обновлен', 'success')
+        return redirect(url_for('main.course', course_id=course_id))
+
+    except Exception as e:
+        logger.error(f"Ошибка при редактировании курса: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при редактировании курса', 'error')
+        return redirect(url_for('main.index'))
+
+@main.route('/course/<int:course_id>/delete', methods=['POST'])
+def delete_course(course_id):
+    """Удаление курса"""
+    try:
+        course = Course.query.get_or_404(course_id)
+
+        # Удаляем все файлы курса физически
+        for material in course.materials:
+            for file in material.files:
+                if os.path.exists(file.file_path):
+                    os.remove(file.file_path)
+
+        db.session.delete(course)
+        db.session.commit()
+
+        flash('Курс и все связанные материалы успешно удалены', 'success')
+        return redirect(url_for('main.index'))
+
+    except Exception as e:
+        logger.error(f"Ошибка при удалении курса: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при удалении курса', 'error')
+        return redirect(url_for('main.index'))
+
 @main.route('/add_course', methods=['POST'])
 def add_course():
     """Добавление нового курса"""
@@ -194,6 +243,9 @@ def delete_material(material_id):
     try:
         material = Material.query.get_or_404(material_id)
         course_id = material.course_id
+        for file in material.files:
+            if os.path.exists(file.file_path):
+                os.remove(file.file_path)
         db.session.delete(material)
         db.session.commit()
 
@@ -257,21 +309,6 @@ def notifications():
         logger.error(f"Ошибка при загрузке уведомлений: {str(e)}")
         flash('Произошла ошибка при загрузке уведомлений', 'error')
         return redirect(url_for('main.index'))
-
-@main.route('/delete_course/<int:course_id>', methods=['POST'])
-def delete_course(course_id):
-    """Удаление курса"""
-    try:
-        course = Course.query.get_or_404(course_id)
-        db.session.delete(course)
-        db.session.commit()
-        flash('Курс успешно удален', 'success')
-    except Exception as e:
-        logger.error(f"Ошибка при удалении курса: {str(e)}")
-        db.session.rollback()
-        flash('Произошла ошибка при удалении курса', 'error')
-
-    return redirect(url_for('main.index'))
 
 
 @main.route('/material/<int:material_id>')

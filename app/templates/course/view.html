@@ -13,9 +13,12 @@
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaterialModal">
                 <i class="bi bi-plus-circle me-2"></i>Добавить материал
             </button>
-            <a href="{{ url_for('admin.manage_course_access', course_id=course.id) }}" class="btn btn-outline-primary">
-                <i class="bi bi-people me-2"></i>Управление доступом
-            </a>
+            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editCourseModal">
+                <i class="bi bi-pencil me-2"></i>Редактировать курс
+            </button>
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteCourseModal">
+                <i class="bi bi-trash me-2"></i>Удалить курс
+            </button>
         </div>
     </div>
 
@@ -43,7 +46,6 @@
                     </div>
                     <p class="mb-1">{{ material.content }}</p>
 
-                    <!-- Секция файлов -->
                     {% if material.files %}
                     <div class="mt-2">
                         <h6><i class="bi bi-paperclip me-2"></i>Прикрепленные файлы:</h6>
@@ -74,7 +76,6 @@
                     </div>
                     {% endif %}
 
-                    <!-- Форма загрузки файла -->
                     <form action="{{ url_for('main.upload_file', material_id=material.id) }}" method="POST" enctype="multipart/form-data" class="mt-3">
                         <div class="input-group">
                             <input type="file" class="form-control form-control-sm" name="file" accept=".pdf,.docx" required>
@@ -94,23 +95,23 @@
     </div>
 </div>
 
-<!-- Модальное окно для добавления материала -->
-<div class="modal fade" id="addMaterialModal" tabindex="-1">
+<!-- Модальное окно редактирования курса -->
+<div class="modal fade" id="editCourseModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Добавить материал</h5>
+                <h5 class="modal-title">Редактировать курс</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('main.add_material', course_id=course.id) }}">
+            <form method="POST" action="{{ url_for('main.edit_course', course_id=course.id) }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="title" class="form-label">Название</label>
-                        <input type="text" class="form-control" id="title" name="title" required>
+                        <input type="text" class="form-control" id="title" name="title" value="{{ course.title }}" required>
                     </div>
                     <div class="mb-3">
-                        <label for="content" class="form-label">Содержание</label>
-                        <textarea class="form-control" id="content" name="content" rows="3" required></textarea>
+                        <label for="description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">{{ course.description }}</textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -118,6 +119,33 @@
                     <button type="submit" class="btn btn-primary">Сохранить</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно удаления курса -->
+<div class="modal fade" id="deleteCourseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы действительно хотите удалить курс "{{ course.title }}"?</p>
+                <p class="text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Это действие нельзя отменить. Все материалы и файлы курса также будут удалены.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form method="POST" action="{{ url_for('main.delete_course', course_id=course.id) }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-2"></i>Удалить
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 </div>
