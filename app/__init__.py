@@ -48,19 +48,30 @@ def create_app():
 
         # Регистрация блюпринтов
         from app.routes import main
-        from app.admin import admin
         app.register_blueprint(main)
-        app.register_blueprint(admin)
 
         # Создаем тестового админа если его нет
         try:
             from app.models import User
-            if not User.query.filter_by(username='admin').first():
+            admin = User.query.filter_by(username='admin').first()
+            if not admin:
                 admin = User(username='admin', email='admin@example.com', is_admin=True)
                 admin.set_password('admin')
                 db.session.add(admin)
                 db.session.commit()
                 logger.info("Admin user created successfully")
+
+            # Создаем тестовый курс если нет курсов
+            if not Course.query.first():
+                test_course = Course(
+                    title='Тестовый курс',
+                    description='Это тестовый курс для проверки функциональности',
+                    user_id=admin.id
+                )
+                db.session.add(test_course)
+                db.session.commit()
+                logger.info("Test course created successfully")
+
         except Exception as e:
             logger.error(f"Error creating admin user: {e}")
             db.session.rollback()

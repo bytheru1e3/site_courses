@@ -17,11 +17,11 @@ def index():
     """
     try:
         courses = Course.query.all()
-        return render_template('admin/courses.html', courses=courses)
+        return render_template('index.html', courses=courses)
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка курсов: {str(e)}")
         flash('Произошла ошибка при загрузке данных', 'error')
-        return render_template('admin/courses.html', courses=[])
+        return render_template('index.html', courses=[])
 
 @main.route('/users')
 def users():
