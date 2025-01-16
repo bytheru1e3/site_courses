@@ -4,7 +4,10 @@ from typing import List, Dict, Any
 from docx import Document
 import PyPDF2
 import mammoth
+import numpy as np
+from sentence_transformers import SentenceTransformer
 from app.services.vector_db import VectorDB
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +17,9 @@ class FileProcessor:
         self.vector_db_path = vector_db_path
         os.makedirs(vector_db_path, exist_ok=True)
 
+        # Инициализация модели для эмбеддингов
+        self.embedding_model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
+
         # Initialize VectorDB with specific paths for index and documents
         self.vector_db = VectorDB(
             index_path=os.path.join(vector_db_path, "vector_index.faiss"),
@@ -21,109 +27,77 @@ class FileProcessor:
         )
         logger.info(f"FileProcessor initialized with vector DB path: {vector_db_path}")
 
+    def extract_text(self, file_path: str, file_type: str) -> str:
+        """Extract text content from a file based on its type"""
+        try:
+            if file_type == 'docx':
+                return self._extract_text_from_docx(file_path)
+            elif file_type == 'pdf':
+                return self._extract_text_from_pdf(file_path)
+            else:
+                raise ValueError(f"Unsupported file type: {file_type}")
+        except Exception as e:
+            logger.error(f"Error extracting text from file: {str(e)}")
+            raise
+
+    def _extract_text_from_docx(self, file_path: str) -> str:
+        """Extract text from DOCX file"""
+        try:
+            with open(file_path, "rb") as docx_file:
+                result = mammoth.extract_raw_text(docx_file)
+                return result.value
+        except Exception as e:
+            logger.error(f"Error processing DOCX file {file_path}: {str(e)}")
+            raise
+
+    def _extract_text_from_pdf(self, file_path: str) -> str:
+        """Extract text from PDF file"""
+        try:
+            text = ""
+            with open(file_path, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + "\n"
+            return text
+        except Exception as e:
+            logger.error(f"Error processing PDF file {file_path}: {str(e)}")
+            raise
+
+    def create_embedding(self, text: str) -> np.ndarray:
+        """Create vector embedding for text using sentence transformer"""
+        try:
+            return self.embedding_model.encode(text)
+        except Exception as e:
+            logger.error(f"Error creating embedding: {str(e)}")
+            raise
+
+    def _generate_document_id(self, file_path: str, text: str) -> str:
+        """Generate a unique document ID based on file path and content"""
+        hash_input = f"{file_path}:{text}"
+        return hashlib.md5(hash_input.encode()).hexdigest()
+
     def process_file(self, file_path: str) -> bool:
         """Process and index a file into the vector database"""
         try:
             logger.info(f"Processing file: {file_path}")
             # Get file extension
-            file_ext = os.path.splitext(file_path)[1].lower()
+            file_ext = os.path.splitext(file_path)[1].lower().replace('.', '')
 
             # Extract text based on file type
-            if file_ext == '.docx':
-                documents = self._process_docx(file_path)
-            elif file_ext == '.pdf':
-                documents = self._process_pdf(file_path)
-            else:
-                raise ValueError(f"Unsupported file type: {file_ext}")
+            text = self.extract_text(file_path, file_ext)
 
-            if not documents:
+            if not text:
                 logger.warning(f"No text content extracted from file: {file_path}")
                 return False
 
-            logger.info(f"Extracted {len(documents)} documents from file")
+            # Generate unique document ID
+            document_id = self._generate_document_id(file_path, text)
 
-            # Add each document chunk to vector database
-            success_count = 0
-            for idx, doc in enumerate(documents):
-                document_id = f"{os.path.basename(file_path)}_{idx}"
-                if self.vector_db.add_document(doc, document_id):
-                    success_count += 1
-
-            logger.info(f"Successfully indexed {success_count} chunks from {file_path}")
-            return success_count > 0
+            # Add to vector database
+            self.vector_db.add_document(text, document_id)
+            logger.info(f"Successfully processed file: {file_path}")
+            return True
 
         except Exception as e:
-            logger.error(f"Error processing file {file_path}: {str(e)}", exc_info=True)
+            logger.error(f"Error processing file {file_path}: {str(e)}")
             return False
-
-    def _process_docx(self, file_path: str) -> List[str]:
-        """Extract text from DOCX file in chunks"""
-        try:
-            with open(file_path, "rb") as docx_file:
-                result = mammoth.extract_raw_text(docx_file)
-                text = result.value
-
-                # Split text into chunks
-                chunks = self._split_text(text)
-                logger.info(f"Extracted {len(chunks)} chunks from DOCX file")
-                return chunks
-
-        except Exception as e:
-            logger.error(f"Error processing DOCX file {file_path}: {str(e)}", exc_info=True)
-            return []
-
-    def _process_pdf(self, file_path: str) -> List[str]:
-        """Extract text from PDF file in chunks"""
-        try:
-            chunks = []
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-
-                for page in pdf_reader.pages:
-                    text = page.extract_text()
-                    if text:
-                        # Split page text into chunks
-                        page_chunks = self._split_text(text)
-                        chunks.extend(page_chunks)
-
-            logger.info(f"Extracted {len(chunks)} chunks from PDF file")
-            return chunks
-
-        except Exception as e:
-            logger.error(f"Error processing PDF file {file_path}: {str(e)}", exc_info=True)
-            return []
-
-    def _split_text(self, text: str, chunk_size: int = 1000) -> List[str]:
-        """Split text into chunks of approximately equal size"""
-        chunks = []
-        current_chunk = []
-        current_length = 0
-
-        for paragraph in text.split('\n'):
-            paragraph = paragraph.strip()
-            if not paragraph:
-                continue
-
-            if current_length + len(paragraph) > chunk_size and current_chunk:
-                chunks.append(' '.join(current_chunk))
-                current_chunk = []
-                current_length = 0
-
-            current_chunk.append(paragraph)
-            current_length += len(paragraph)
-
-        if current_chunk:
-            chunks.append(' '.join(current_chunk))
-
-        return chunks
-
-    def search_similar_documents(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
-        """Search for similar documents in the vector database"""
-        try:
-            logger.info(f"Searching for documents similar to query: {query}")
-            results = self.vector_db.search(query, top_k=top_k)
-            logger.info(f"Found {len(results)} similar documents")
-            return results
-        except Exception as e:
-            logger.error(f"Error searching documents: {str(e)}", exc_info=True)
-            return []
