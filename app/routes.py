@@ -29,8 +29,7 @@ def index():
 def chat():
     """Страница чата с ИИ"""
     try:
-        courses = Course.query.all()
-        return render_template('chat/index.html', courses=courses)
+        return render_template('chat/index.html')
     except Exception as e:
         logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
         flash('Произошла ошибка при загрузке чата', 'error')
@@ -325,44 +324,3 @@ def edit_material(material_id):
         db.session.rollback()
         flash('Произошла ошибка при редактировании материала', 'error')
         return redirect(url_for('main.course', course_id=material.course_id))
-
-@main.route('/chat/ask', methods=['POST'])
-def chat_ask():
-    """Обработка вопросов в чате"""
-    try:
-        course_id = request.form.get('course_id')
-        question = request.form.get('question')
-
-        if not course_id or not question:
-            return jsonify({
-                'success': False,
-                'error': 'Отсутствует ID курса или вопрос'
-            }), 400
-
-        # Получаем курс
-        course = Course.query.get_or_404(course_id)
-
-        # Инициализируем векторный поиск
-        from app.services.vector_search import VectorSearch
-        vector_search = VectorSearch()
-
-        # Ищем ответ в материалах курса
-        answer = vector_search.search(question)
-
-        if not answer:
-            return jsonify({
-                'success': True,
-                'answer': 'К сожалению, я не нашел информации по вашему вопросу в материалах курса.'
-            })
-
-        return jsonify({
-            'success': True,
-            'answer': answer[0]['content'] if isinstance(answer[0], dict) else str(answer[0])
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка при обработке вопроса в чате: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Произошла ошибка при обработке вопроса'
-        }), 500
