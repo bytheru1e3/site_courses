@@ -1,16 +1,18 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_file
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
+from app.services.ai_service import AIService
 import logging
 import os
 from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
-
 main = Blueprint('main', __name__)
 
-# Путь к векторной базе данных
+# Инициализация AI сервиса
 VECTOR_DB_PATH = os.path.join(os.getcwd(), "app", "data")
+os.makedirs(VECTOR_DB_PATH, exist_ok=True)
+ai_service = AIService(VECTOR_DB_PATH)
 
 @main.route('/')
 def index():
@@ -332,21 +334,35 @@ def chat_ask():
     """Обработка вопросов в чате"""
     try:
         data = request.get_json()
+        if not data:
+            logger.error("Empty request data")
+            return jsonify({
+                'success': False,
+                'error': 'Пустой запрос'
+            }), 400
+
         course_id = data.get('course_id')
         message = data.get('message')
 
         if not all([course_id, message]):
+            logger.error("Missing required fields")
             return jsonify({
                 'success': False,
                 'error': 'Необходимо указать курс и сообщение'
             }), 400
 
-        # Получаем курс и его материалы для контекста
+        # Получаем курс для контекста
         course = Course.query.get_or_404(course_id)
 
-        # Здесь будет логика обработки вопроса через GigaChat
-        # Временный ответ для проверки
-        answer = f"Ваш вопрос по курсу '{course.title}' получен: {message}"
+        # Получаем ответ от ИИ
+        answer = ai_service.get_ai_response(message, course.title)
+
+        if not answer:
+            logger.error("Empty AI response")
+            return jsonify({
+                'success': False,
+                'error': 'Не удалось получить ответ от сервиса ИИ'
+            }), 500
 
         return jsonify({
             'success': True,
