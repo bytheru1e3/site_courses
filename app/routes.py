@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_file
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
+from app.services.vector_search import VectorSearch # Added import
 import logging
 import os
 from werkzeug.utils import secure_filename
@@ -35,6 +36,44 @@ def chat():
         logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
         flash('Произошла ошибка при загрузке чата', 'error')
         return redirect(url_for('main.index'))
+
+@main.route('/chat/ask', methods=['POST'])
+def chat_ask():
+    """Обработка вопроса в чате"""
+    try:
+        course_id = request.form.get('course_id')
+        question = request.form.get('question')
+
+        if not course_id or not question:
+            logger.warning("Отсутствует course_id или вопрос")
+            return jsonify({'success': False, 'error': 'Необходимо выбрать курс и задать вопрос'})
+
+        # Инициализация поиска
+        vector_search = VectorSearch()
+
+        # Поиск ответа
+        results = vector_search.search(question)
+
+        if not results:
+            return jsonify({
+                'success': True,
+                'answer': 'К сожалению, не удалось найти информацию по вашему вопросу в материалах курса.'
+            })
+
+        # Форматируем ответ из результатов поиска
+        answer = results[0].get('content', 'Информация не найдена')
+
+        return jsonify({
+            'success': True,
+            'answer': answer
+        })
+
+    except Exception as e:
+        logger.error(f"Ошибка при обработке вопроса: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Произошла ошибка при обработке вашего вопроса'
+        })
 
 @main.route('/notifications')
 def notifications():
