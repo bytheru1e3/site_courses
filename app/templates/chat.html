@@ -24,8 +24,12 @@
                                 {% endfor %}
                             </select>
                             <input type="text" class="form-control" id="message-input" placeholder="Введите ваш вопрос...">
-                            <button class="btn btn-primary" type="submit">
-                                <i class="bi bi-send me-2"></i>Отправить
+                            <button class="btn btn-primary" type="submit" id="send-button">
+                                <span class="d-flex align-items-center">
+                                    <i class="bi bi-send me-2"></i>
+                                    <span class="button-text">Отправить</span>
+                                    <span class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+                                </span>
                             </button>
                         </div>
                     </form>
@@ -43,21 +47,31 @@ document.addEventListener('DOMContentLoaded', function() {
     const messageInput = document.getElementById('message-input');
     const courseSelect = document.getElementById('course-select');
     const chatMessages = document.getElementById('chat-messages');
+    const sendButton = document.getElementById('send-button');
+    const spinner = sendButton.querySelector('.spinner-border');
+    const buttonText = sendButton.querySelector('.button-text');
 
     chatForm.addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const courseId = courseSelect.value;
         const message = messageInput.value.trim();
-        
+
         if (!courseId) {
             alert('Пожалуйста, выберите курс');
             return;
         }
-        
+
         if (!message) {
             return;
         }
+
+        // Disable form elements and show loading state
+        sendButton.disabled = true;
+        messageInput.disabled = true;
+        courseSelect.disabled = true;
+        spinner.classList.remove('d-none');
+        buttonText.textContent = 'Отправка...';
 
         // Добавляем сообщение пользователя
         appendMessage('user', message);
@@ -82,14 +96,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 appendMessage('error', data.error || 'Произошла ошибка при обработке вопроса');
             }
         } catch (error) {
+            console.error('Error:', error);
             appendMessage('error', 'Произошла ошибка при отправке запроса');
+        } finally {
+            // Re-enable form elements and hide loading state
+            sendButton.disabled = false;
+            messageInput.disabled = false;
+            courseSelect.disabled = false;
+            spinner.classList.add('d-none');
+            buttonText.textContent = 'Отправить';
         }
     });
 
     function appendMessage(type, content) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'mb-3';
-        
+
         let icon, bgClass;
         switch(type) {
             case 'user':
@@ -115,7 +137,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="ms-4">${content}</div>
             </div>
         `;
-        
+
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
