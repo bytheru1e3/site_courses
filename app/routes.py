@@ -325,3 +325,44 @@ def edit_material(material_id):
         db.session.rollback()
         flash('Произошла ошибка при редактировании материала', 'error')
         return redirect(url_for('main.course', course_id=material.course_id))
+
+@main.route('/chat/ask', methods=['POST'])
+def chat_ask():
+    """Обработка вопроса в чате"""
+    try:
+        course_id = request.form.get('course_id')
+        question = request.form.get('question')
+
+        if not course_id or not question:
+            return jsonify({
+                'success': False,
+                'error': 'Не указан курс или вопрос'
+            }), 400
+
+        course = Course.query.get_or_404(course_id)
+
+        # Используем векторный поиск для получения ответа
+        from app.services.vector_search import VectorSearch
+        vector_search = VectorSearch()
+        search_results = vector_search.search(question)
+
+        if not search_results:
+            return jsonify({
+                'success': True,
+                'answer': 'К сожалению, я не нашел подходящей информации по вашему вопросу в материалах курса.'
+            })
+
+        # Формируем ответ из результатов поиска
+        answer = search_results[0].get('content', 'Извините, не удалось сформировать ответ.')
+
+        return jsonify({
+            'success': True,
+            'answer': answer
+        })
+
+    except Exception as e:
+        logger.error(f"Ошибка при обработке вопроса в чате: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Произошла ошибка при обработке вопроса'
+        }), 500
