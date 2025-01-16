@@ -29,7 +29,8 @@ def index():
 def chat():
     """Страница чата с ИИ"""
     try:
-        return render_template('chat/index.html')
+        courses = Course.query.all()
+        return render_template('chat/index.html', courses=courses)
     except Exception as e:
         logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
         flash('Произошла ошибка при загрузке чата', 'error')
