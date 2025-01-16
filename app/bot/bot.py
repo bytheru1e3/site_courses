@@ -43,6 +43,7 @@ class CourseBot:
             self.dp.message.register(self.auth_handler, Command("auth"))
             self.dp.message.register(self.list_courses_handler, Command("courses"))
             self.dp.message.register(self.help_handler, Command("help"))
+            self.dp.message.register(self.ask_handler, Command("ask"))  # Обработчик команды /ask
             self.dp.message.register(self.process_question)  # Обработчик для вопросов после выбора курса
             self.dp.callback_query.register(
                 self.course_callback_handler,
@@ -51,6 +52,10 @@ class CourseBot:
             self.dp.callback_query.register(
                 self.materials_callback_handler,
                 lambda c: c.data.startswith('materials_')
+            )
+            self.dp.callback_query.register(
+                self.ask_course_callback_handler,
+                lambda c: c.data.startswith('ask_course_')
             )
             self.dp.callback_query.register(
                 self.after_question_callback_handler,
@@ -67,7 +72,10 @@ class CourseBot:
             welcome_text = (
                 "👋 Добро пожаловать в бот системы управления курсами!\n\n"
                 "Доступные команды:\n"
+                "/register - Зарегистрироваться\n"
+                "/auth - Войти в систему\n"
                 "/courses - Просмотр списка курсов\n"
+                "/ask - Задать вопрос по материалам курса\n"
                 "/help - Помощь и информация"
             )
             await self.bot.send_message(chat_id=message.chat.id, text=welcome_text)
@@ -75,24 +83,63 @@ class CourseBot:
             logger.error(f"Error in start handler: {e}", exc_info=True)
             await self.bot.send_message(chat_id=message.chat.id, text="❌ Произошла ошибка при обработке команды")
 
-    async def help_handler(self, message: types.Message):
-        """Обработчик команды /help"""
+    async def ask_handler(self, message: types.Message):
+        """Обработчик команды /ask - показывает список курсов для выбора"""
         try:
-            help_text = (
-                "🔍 Справка по использованию бота:\n\n"
-                "1️⃣ /start - Начать работу с ботом\n"
-                "2️⃣ /courses - Показать список доступных курсов\n"
-                "3️⃣ /help - Показать это сообщение\n\n"
-                "Как задать вопрос:\n"
-                "1. Используйте команду /courses\n"
-                "2. Выберите курс из списка\n"
-                "3. Задайте свой вопрос\n"
-                "4. Получите ответ с релевантной информацией"
-            )
-            await message.reply(help_text)
+            with self.app.app_context():
+                courses = Course.query.all()
+                if not courses:
+                    await message.answer("📚 На данный момент нет доступных курсов")
+                    return
+
+                # Проверяем авторизацию пользователя
+                user = User.query.filter_by(telegram_id=str(message.from_user.id)).first()
+                if not user:
+                    await message.answer("❌ Пожалуйста, сначала зарегистрируйтесь с помощью команды /register")
+                    return
+
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text=f"📘 {course.title}",
+                        callback_data=f"ask_course_{course.id}"
+                    )]
+                    for course in courses
+                ])
+
+                await message.answer("📚 Выберите курс, по которому хотите задать вопрос:", reply_markup=keyboard)
+                logger.info(f"Ask command processed for user {message.from_user.id}")
+
         except Exception as e:
-            logger.error(f"Error in help handler: {e}", exc_info=True)
-            await message.reply("❌ Произошла ошибка при обработке команды")
+            logger.error(f"Error in ask handler: {e}", exc_info=True)
+            await message.answer("❌ Произошла ошибка при получении списка курсов")
+
+    async def ask_course_callback_handler(self, callback: types.CallbackQuery):
+        """Обработчик выбора курса для вопроса"""
+        try:
+            course_id = int(callback.data.split('_')[2])
+            user_id = callback.from_user.id
+
+            with self.app.app_context():
+                course = Course.query.get(course_id)
+                if not course:
+                    await callback.answer("❌ Курс не найден")
+                    return
+
+                # Сохраняем выбранный курс для пользователя
+                self.user_states[user_id] = {
+                    'waiting_for_question': True,
+                    'course_id': course_id
+                }
+
+                await callback.message.edit_text(
+                    f"📝 Вы выбрали курс: {course.title}\n\n"
+                    "Теперь отправьте ваш вопрос в чат."
+                )
+                await callback.answer()
+
+        except Exception as e:
+            logger.error(f"Error in ask course callback handler: {e}")
+            await callback.answer("❌ Произошла ошибка при выборе курса")
 
     async def process_question(self, message: types.Message):
         """Обработчик вопросов после выбора курса"""
@@ -126,8 +173,9 @@ class CourseBot:
                 try:
                     answer = answer_question(question, self.vector_db_path)
 
-                    # Создаем клавиатуру только с кнопкой "Завершить"
+                    # Создаем клавиатуру с кнопками
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="📝 Задать новый вопрос", callback_data="ask_new_question")],
                         [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
                     ])
 
@@ -144,8 +192,7 @@ class CourseBot:
                         f"📚 <b>Результаты поиска по курсу</b>\n"
                         f"<i>{course.title}</i>\n\n"
                         f"❓ <b>Ваш вопрос:</b>\n{question}\n\n"
-                        f"🔍 <b>Найденная информация:</b>\n{answer}\n\n"
-                        "✍️ Вы можете задать следующий вопрос или нажать кнопку «Завершить»"
+                        f"🔍 <b>Найденная информация:</b>\n{answer}"
                     )
 
                     # Отправляем ответ с разбиением на части при необходимости
@@ -164,29 +211,21 @@ class CourseBot:
                         reply_markup=keyboard
                     )
 
-                # НЕ очищаем состояние пользователя, чтобы можно было продолжать задавать вопросы
-                # self.user_states.pop(user_id, None)
+                # Очищаем состояние пользователя после обработки вопроса
+                self.user_states.pop(user_id, None)
 
         except Exception as e:
             logger.error(f"Error processing question: {e}", exc_info=True)
             await message.reply("❌ Произошла ошибка при обработке вашего вопроса")
+            if user_id in locals():
+                self.user_states.pop(user_id, None)
 
     async def after_question_callback_handler(self, callback: types.CallbackQuery):
         """Обработчик действий после получения ответа на вопрос"""
         try:
             action = callback.data
 
-            if action == "end_dialog":
-                # Очищаем состояние пользователя при завершении диалога
-                user_id = callback.from_user.id
-                if user_id in self.user_states:
-                    self.user_states.pop(user_id)
-
-                await callback.message.edit_text(
-                    "✅ Диалог завершен. Используйте /courses, чтобы начать новую сессию вопросов."
-                )
-
-            elif action == "ask_new_question":
+            if action == "ask_new_question":
                 # Показываем список курсов для нового вопроса
                 with self.app.app_context():
                     courses = Course.query.all()
@@ -206,6 +245,11 @@ class CourseBot:
                         "📚 Выберите курс, по которому хотите задать вопрос:",
                         reply_markup=keyboard
                     )
+
+            elif action == "end_dialog":
+                await callback.message.edit_text(
+                    "✅ Диалог завершен. Используйте /ask, чтобы задать новый вопрос."
+                )
 
             await callback.answer()
 
@@ -235,7 +279,7 @@ class CourseBot:
             if response.get("success"):
                 await message.reply(
                     "✅ Регистрация прошла успешно!\n"
-                    "Теперь вы можете использовать команду /courses для поиска информации в материалах курсов."
+                    "Теперь вы можете использовать команду /ask для поиска информации в материалах курсов."
                 )
             else:
                 await message.reply(f"❌ Ошибка регистрации: {response.get('error')}")
@@ -255,7 +299,7 @@ class CourseBot:
                 user = response.get("user")
                 await message.reply(
                     f"✅ Вы вошли как {user['username']} ({user['email']})\n"
-                    "Используйте /courses для поиска информации в материалах курсов."
+                    "Используйте /ask для поиска информации в материалах курсов."
                 )
             else:
                 await message.reply(
@@ -267,18 +311,33 @@ class CourseBot:
             logger.error(f"Error in auth handler: {e}", exc_info=True)
             await message.reply("❌ Произошла ошибка при входе в систему")
 
+    async def help_handler(self, message: types.Message):
+        """Обработчик команды /help"""
+        try:
+            help_text = (
+                "🔍 Справка по использованию бота:\n\n"
+                "1️⃣ /start - Начать работу с ботом\n"
+                "2️⃣ /register <email> - Зарегистрироваться\n"
+                "3️⃣ /auth - Войти в систему\n"
+                "4️⃣ /courses - Показать список доступных курсов\n"
+                "5️⃣ /ask - Задать вопрос по материалам курса\n"
+                "6️⃣ /help - Показать это сообщение\n\n"
+                "Как задать вопрос:\n"
+                "1. Используйте команду /ask\n"
+                "2. Выберите курс из списка\n"
+                "3. Введите ваш вопрос\n"
+                "4. Получите ответ с релевантной информацией\n"
+                "5. Используйте кнопки для продолжения диалога"
+            )
+            await message.reply(help_text)
+        except Exception as e:
+            logger.error(f"Error in help handler: {e}", exc_info=True)
+            await message.reply("❌ Произошла ошибка при обработке команды")
+
     async def list_courses_handler(self, message: types.Message):
         """Обработчик команды /courses"""
         try:
             with self.app.app_context():
-                # Проверяем авторизацию пользователя
-                user = User.query.filter_by(telegram_id=str(message.from_user.id)).first()
-                if not user:
-                    await message.answer(
-                        "❌ Пожалуйста, сначала зарегистрируйтесь с помощью команды /register <email>"
-                    )
-                    return
-
                 courses = Course.query.all()
                 if not courses:
                     await message.answer("📚 На данный момент нет доступных курсов")
@@ -292,12 +351,8 @@ class CourseBot:
                     for course in courses
                 ])
 
-                await message.answer(
-                    "📚 Выберите курс для поиска информации или задания вопроса:",
-                    reply_markup=keyboard
-                )
+                await message.answer("📚 Доступные курсы:", reply_markup=keyboard)
                 logger.info(f"Courses listed for user {message.from_user.id}")
-
         except Exception as e:
             logger.error(f"Error in list courses handler: {e}")
             await message.answer("❌ Произошла ошибка при получении списка курсов")
@@ -312,23 +367,16 @@ class CourseBot:
                     await callback.answer("❌ Курс не найден")
                     return
 
-                # Сохраняем выбранный курс для пользователя
-                user_id = callback.from_user.id
-                self.user_states[user_id] = {
-                    'waiting_for_question': True,
-                    'course_id': course_id
-                }
+                text = f"📘 {course.title}\n\n{course.description or 'Описание отсутствует'}"
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text="📚 Материалы курса",
+                        callback_data=f"materials_{course_id}"
+                    )]
+                ])
 
-                text = (
-                    f"📘 Курс: {course.title}\n\n"
-                    f"{course.description or 'Описание отсутствует'}\n\n"
-                    "✍️ Теперь вы можете задать вопрос по материалам этого курса.\n"
-                    "Просто отправьте ваш вопрос в следующем сообщении."
-                )
-
-                await callback.message.edit_text(text)
+                await callback.message.edit_text(text, reply_markup=keyboard)
                 await callback.answer()
-
         except Exception as e:
             logger.error(f"Error in course callback handler: {e}")
             await callback.answer("❌ Произошла ошибка")

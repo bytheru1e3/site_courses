@@ -25,6 +25,17 @@ def index():
         flash('Произошла ошибка при загрузке данных', 'error')
         return render_template('index.html', courses=[])
 
+@main.route('/chat')
+def chat():
+    """Страница чата с ИИ"""
+    try:
+        courses = Course.query.all()
+        return render_template('chat/index.html', courses=courses)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
+        flash('Произошла ошибка при загрузке чата', 'error')
+        return redirect(url_for('main.index'))
+
 @main.route('/notifications')
 def notifications():
     """Страница уведомлений"""
@@ -314,46 +325,3 @@ def edit_material(material_id):
         db.session.rollback()
         flash('Произошла ошибка при редактировании материала', 'error')
         return redirect(url_for('main.course', course_id=material.course_id))
-
-
-@main.route('/chat')
-def chat():
-    """Страница чата с ассистентом"""
-    try:
-        courses = Course.query.all()
-        return render_template('chat/index.html', courses=courses)
-    except Exception as e:
-        logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
-        flash('Произошла ошибка при загрузке чата', 'error')
-        return redirect(url_for('main.index'))
-
-@main.route('/chat/ask', methods=['POST'])
-def chat_ask():
-    """Обработка вопроса к ассистенту"""
-    try:
-        course_id = request.form.get('course_id')
-        question = request.form.get('question')
-
-        if not course_id or not question:
-            return jsonify({
-                'success': False,
-                'error': 'Не указан курс или вопрос'
-            }), 400
-
-        course = Course.query.get_or_404(course_id)
-
-        # Здесь будет логика обработки вопроса через GigaChat
-        # Временно возвращаем тестовый ответ
-        answer = f"Это тестовый ответ на ваш вопрос о курсе '{course.title}'"
-
-        return jsonify({
-            'success': True,
-            'answer': answer
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка при обработке вопроса: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Произошла ошибка при обработке вопроса'
-        }), 500
