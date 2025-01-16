@@ -59,7 +59,7 @@ class CourseBot:
             )
             self.dp.callback_query.register(
                 self.after_question_callback_handler,
-                lambda c: c.data in ['ask_new_question', 'end_dialog']
+                lambda c: c.data in ['end_dialog']
             )
         except Exception as e:
             logger.error(f"Error registering handlers: {e}", exc_info=True)
@@ -154,17 +154,22 @@ class CourseBot:
             course_id = user_state['course_id']
             question = message.text
 
+            # Создаем клавиатуру только с кнопкой завершения
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Завершить диалог", callback_data="end_dialog")]
+            ])
+
             with self.app.app_context():
                 # Проверяем существование курса
                 course = Course.query.get(course_id)
                 if not course:
-                    await message.reply("❌ Курс не найден")
+                    await message.reply("❌ Курс не найден", reply_markup=keyboard)
                     return
 
                 # Проверяем доступ пользователя к курсу
                 user = User.query.filter_by(telegram_id=str(message.from_user.id)).first()
                 if not user or not user.has_access_to_course(course):
-                    await message.reply("❌ У вас нет доступа к этому курсу")
+                    await message.reply("❌ У вас нет доступа к этому курсу", reply_markup=keyboard)
                     return
 
                 # Поиск ответа с использованием векторной базы данных
@@ -173,18 +178,18 @@ class CourseBot:
                 try:
                     answer = answer_question(question, self.vector_db_path)
 
-                    # Создаем клавиатуру с кнопками
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="📝 Задать новый вопрос", callback_data="ask_new_question")],
-                        [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
-                    ])
-
                     if not answer or "К сожалению, я не нашел информации" in answer:
                         await message.reply(
                             "❌ К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
-                            "💡 Попробуйте переформулировать вопрос или выбрать другой курс.",
+                            "💡 Попробуйте переформулировать вопрос или задать его иначе.\n\n"
+                            "Вы можете продолжать задавать вопросы по этому курсу.",
                             reply_markup=keyboard
                         )
+                        # Сохраняем состояние для продолжения диалога
+                        self.user_states[user_id] = {
+                            'waiting_for_question': True,
+                            'course_id': course_id
+                        }
                         return
 
                     # Формируем полный ответ с улучшенным форматированием
@@ -192,7 +197,9 @@ class CourseBot:
                         f"📚 <b>Результаты поиска по курсу</b>\n"
                         f"<i>{course.title}</i>\n\n"
                         f"❓ <b>Ваш вопрос:</b>\n{question}\n\n"
-                        f"🔍 <b>Найденная информация:</b>\n{answer}"
+                        f"🔍 <b>Найденная информация:</b>\n{answer}\n\n"
+                        "💡 Вы можете продолжать задавать вопросы по этому курсу\n"
+                        "   или нажать кнопку «Завершить диалог» для выхода"
                     )
 
                     # Отправляем ответ с разбиением на части при необходимости
@@ -204,51 +211,46 @@ class CourseBot:
                     )
                     logger.info(f"Answered question for user {message.from_user.id} about course {course_id}")
 
+                    # Оставляем пользователя в режиме ожидания следующего вопроса
+                    self.user_states[user_id] = {
+                        'waiting_for_question': True,
+                        'course_id': course_id
+                    }
+
                 except Exception as e:
                     logger.error(f"Error processing question: {str(e)}", exc_info=True)
                     await message.reply(
-                        "❌ Произошла ошибка при обработке запроса. Пожалуйста, попробуйте еще раз.",
+                        "❌ Произошла ошибка при обработке запроса. "
+                        "Вы можете попробовать задать вопрос еще раз или завершить диалог.",
                         reply_markup=keyboard
                     )
 
-                # Очищаем состояние пользователя после обработки вопроса
-                self.user_states.pop(user_id, None)
-
         except Exception as e:
+            user_id = message.from_user.id  # Определяем user_id здесь для доступности в блоке очистки
             logger.error(f"Error processing question: {e}", exc_info=True)
-            await message.reply("❌ Произошла ошибка при обработке вашего вопроса")
-            if user_id in locals():
+            await message.reply(
+                "❌ Произошла ошибка при обработке вашего вопроса. "
+                "Пожалуйста, используйте /ask чтобы начать заново.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Завершить диалог", callback_data="end_dialog")]
+                ])
+            )
+            if user_id:  # Проверяем определен ли user_id
                 self.user_states.pop(user_id, None)
 
     async def after_question_callback_handler(self, callback: types.CallbackQuery):
         """Обработчик действий после получения ответа на вопрос"""
         try:
             action = callback.data
+            user_id = callback.from_user.id
 
-            if action == "ask_new_question":
-                # Показываем список курсов для нового вопроса
-                with self.app.app_context():
-                    courses = Course.query.all()
-                    if not courses:
-                        await callback.message.edit_text("📚 На данный момент нет доступных курсов")
-                        return
-
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(
-                            text=f"📘 {course.title}",
-                            callback_data=f"ask_course_{course.id}"
-                        )]
-                        for course in courses
-                    ])
-
-                    await callback.message.edit_text(
-                        "📚 Выберите курс, по которому хотите задать вопрос:",
-                        reply_markup=keyboard
-                    )
-
-            elif action == "end_dialog":
+            if action == "end_dialog":
+                # Очищаем состояние пользователя и завершаем диалог
+                if user_id in self.user_states:
+                    self.user_states.pop(user_id)
                 await callback.message.edit_text(
-                    "✅ Диалог завершен. Используйте /ask, чтобы задать новый вопрос."
+                    "✅ Диалог завершен.\n"
+                    "Используйте /ask чтобы начать новый диалог с выбором курса."
                 )
 
             await callback.answer()
