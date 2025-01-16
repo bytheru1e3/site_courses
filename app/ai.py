@@ -4,7 +4,6 @@ import numpy as np
 import logging
 from typing import List, Dict, Any
 import json
-import hashlib
 from app.services.vector_db import VectorDB
 from app.services.gigachat import GigaChatAPI
 
@@ -15,6 +14,7 @@ model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet
 
 MAX_RESPONSE_LENGTH = 3000  # Maximum length for a single response message
 MAX_RESULTS = 2  # Limit number of results to keep response concise
+MAX_CONTEXT_LENGTH = 15000  # Maximum length of context in characters
 
 SYSTEM_PROMPT = """
 Ты интеллектуальный помощник, который отвечает на вопросы по контексту. 
@@ -28,7 +28,11 @@ SYSTEM_PROMPT = """
 
 def get_embedding(text: str) -> np.ndarray:
     """Получить векторное представление текста"""
-    return model.encode([text])[0]
+    try:
+        return model.encode([text])[0]
+    except Exception as e:
+        logger.error(f"Error creating embedding: {str(e)}")
+        raise
 
 def truncate_text(text: str, max_length: int = MAX_RESPONSE_LENGTH) -> str:
     """Обрезать текст до указанной длины, сохраняя целостность предложений"""
@@ -63,27 +67,38 @@ def answer_question(question: str, vector_db_path: str) -> str:
         if not results:
             return "К сожалению, я не нашел информации по вашему вопросу в доступных материалах. Попробуйте переформулировать вопрос или уточнить, что именно вас интересует."
 
-        # Формируем контекст из найденных документов
+        # Формируем контекст из найденных документов с ограничением по длине
         context = ""
+        total_length = 0
         for result in results:
             if isinstance(result, dict) and 'text' in result:
                 # Нормализуем текст
                 text = result['text'].replace('\n', ' ').replace('\r', '')
                 text = ' '.join(text.split())
-                context += text + "\n\n"
             else:
                 text = str(result).replace('\n', ' ').replace('\r', '')
                 text = ' '.join(text.split())
-                context += text + "\n\n"
 
-        # Формируем промпт для нейросети
+            # Проверяем, не превысит ли добавление этого текста максимальную длину
+            if total_length + len(text) > MAX_CONTEXT_LENGTH:
+                # Если превысит, обрезаем текст
+                remaining_length = MAX_CONTEXT_LENGTH - total_length
+                if remaining_length > 0:
+                    text = truncate_text(text, remaining_length)
+                    context += text + "\n\n"
+                break
+            else:
+                context += text + "\n\n"
+                total_length += len(text)
+
+        # Формируем промпт для нейросети с учетом ограничений контекста
         prompt = f"""
 {SYSTEM_PROMPT}
 
 Вопрос пользователя: {question}
 
 Контекст из документов:
-{context}
+{context[:MAX_CONTEXT_LENGTH]}
 
 Пожалуйста, сформируй понятный и структурированный ответ на основе предоставленного контекста.
 """
