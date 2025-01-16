@@ -48,3 +48,14 @@ app/data/*
 !app/data/.gitkeep
 *.log
 generated-icon*.png
+
+# Database
+*.db
+*.sqlite3
+
+# Secrets and configurations
+.env
+
+# Vector database files
+*.faiss
+documents.json
