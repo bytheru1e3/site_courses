@@ -126,9 +126,8 @@ class CourseBot:
                 try:
                     answer = answer_question(question, self.vector_db_path)
 
-                    # Создаем клавиатуру с кнопками
+                    # Создаем клавиатуру только с кнопкой "Завершить"
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="📝 Задать новый вопрос", callback_data="ask_new_question")],
                         [InlineKeyboardButton(text="✅ Завершить", callback_data="end_dialog")]
                     ])
 
@@ -145,7 +144,8 @@ class CourseBot:
                         f"📚 <b>Результаты поиска по курсу</b>\n"
                         f"<i>{course.title}</i>\n\n"
                         f"❓ <b>Ваш вопрос:</b>\n{question}\n\n"
-                        f"🔍 <b>Найденная информация:</b>\n{answer}"
+                        f"🔍 <b>Найденная информация:</b>\n{answer}\n\n"
+                        "✍️ Вы можете задать следующий вопрос или нажать кнопку «Завершить»"
                     )
 
                     # Отправляем ответ с разбиением на части при необходимости
@@ -164,21 +164,29 @@ class CourseBot:
                         reply_markup=keyboard
                     )
 
-                # Очищаем состояние пользователя после обработки вопроса
-                self.user_states.pop(user_id, None)
+                # НЕ очищаем состояние пользователя, чтобы можно было продолжать задавать вопросы
+                # self.user_states.pop(user_id, None)
 
         except Exception as e:
             logger.error(f"Error processing question: {e}", exc_info=True)
             await message.reply("❌ Произошла ошибка при обработке вашего вопроса")
-            if user_id in locals():
-                self.user_states.pop(user_id, None)
 
     async def after_question_callback_handler(self, callback: types.CallbackQuery):
         """Обработчик действий после получения ответа на вопрос"""
         try:
             action = callback.data
 
-            if action == "ask_new_question":
+            if action == "end_dialog":
+                # Очищаем состояние пользователя при завершении диалога
+                user_id = callback.from_user.id
+                if user_id in self.user_states:
+                    self.user_states.pop(user_id)
+
+                await callback.message.edit_text(
+                    "✅ Диалог завершен. Используйте /courses, чтобы начать новую сессию вопросов."
+                )
+
+            elif action == "ask_new_question":
                 # Показываем список курсов для нового вопроса
                 with self.app.app_context():
                     courses = Course.query.all()
@@ -198,11 +206,6 @@ class CourseBot:
                         "📚 Выберите курс, по которому хотите задать вопрос:",
                         reply_markup=keyboard
                     )
-
-            elif action == "end_dialog":
-                await callback.message.edit_text(
-                    "✅ Диалог завершен. Используйте /courses, чтобы задать новый вопрос."
-                )
 
             await callback.answer()
 
