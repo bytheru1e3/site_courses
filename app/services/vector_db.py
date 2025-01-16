@@ -3,14 +3,13 @@ import json
 import faiss
 import numpy as np
 import logging
-import traceback
 from sentence_transformers import SentenceTransformer
-from typing import List, Dict, Any, Optional
+import traceback
 
 logger = logging.getLogger(__name__)
 
 class VectorDB:
-    def __init__(self, index_path: str, documents_path: str):
+    def __init__(self, index_path, documents_path):
         """Initialize vector database with paths for index and documents"""
         self.index_path = index_path
         self.documents_path = documents_path
@@ -59,11 +58,11 @@ class VectorDB:
                 logger.info(f"Documents file not found at: {self.documents_path}")
 
         except Exception as e:
-            logger.error(f"Error loading database: {str(e)}\n{traceback.format_exc()}")
+            logger.error(f"Error loading database: {e}\n{traceback.format_exc()}")
             self.index = None
             self.documents = []
 
-    def save(self) -> bool:
+    def save(self):
         """Save index and documents to files"""
         try:
             # Сохраняем индекс
@@ -71,7 +70,7 @@ class VectorDB:
                 faiss.write_index(self.index, self.index_path)
                 logger.info(f"Index saved to {self.index_path}")
             except Exception as e:
-                logger.error(f"Error saving index: {str(e)}\n{traceback.format_exc()}")
+                logger.error(f"Error saving index: {e}\n{traceback.format_exc()}")
                 return False
 
             # Сохраняем документы в JSON формате
@@ -80,52 +79,15 @@ class VectorDB:
                     json.dump(self.documents, f, ensure_ascii=False, indent=2)
                 logger.info(f"Documents saved to {self.documents_path}")
             except Exception as e:
-                logger.error(f"Error saving documents: {str(e)}\n{traceback.format_exc()}")
+                logger.error(f"Error saving documents: {e}\n{traceback.format_exc()}")
                 return False
 
             return True
         except Exception as e:
-            logger.error(f"Error saving database: {str(e)}\n{traceback.format_exc()}")
+            logger.error(f"Error saving database: {e}\n{traceback.format_exc()}")
             return False
 
-    def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
-        """Search for similar documents"""
-        try:
-            if not query or not isinstance(query, str):
-                logger.error("Invalid query for search")
-                return []
-
-            if not self.index or self.index.ntotal == 0:
-                logger.warning("Database is empty")
-                return []
-
-            # Создаем embedding запроса
-            query_embedding = self.model.encode([query])[0]
-            if query_embedding is None:
-                logger.error("Failed to create embedding for query")
-                return []
-
-            query_embedding = np.array([query_embedding]).astype('float32')
-
-            # Ищем похожие документы
-            try:
-                distances, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
-                logger.info(f"Found {len(indices[0])} documents for query")
-            except Exception as e:
-                logger.error(f"Error searching in index: {str(e)}\n{traceback.format_exc()}")
-                return []
-
-            results = []
-            for idx in indices[0]:
-                if idx >= 0 and idx < len(self.documents):
-                    results.append(self.documents[idx])
-            return results
-
-        except Exception as e:
-            logger.error(f"Error during search: {str(e)}\n{traceback.format_exc()}")
-            return []
-
-    def add_document(self, text: str, document_id: str) -> bool:
+    def add_document(self, text, document_id):
         """Add document to index"""
         try:
             if not text or not isinstance(text, str):
@@ -154,7 +116,7 @@ class VectorDB:
                 embedding_array = np.array([embedding]).astype('float32')
                 self.index.add(embedding_array)
             except Exception as e:
-                logger.error(f"Error adding embedding to index: {str(e)}\n{traceback.format_exc()}")
+                logger.error(f"Error adding embedding to index: {e}\n{traceback.format_exc()}")
                 # Удаляем документ из списка, так как не удалось добавить в индекс
                 self.documents.pop()
                 return False
@@ -169,8 +131,44 @@ class VectorDB:
             return True
 
         except Exception as e:
-            logger.error(f"Error adding document: {str(e)}\n{traceback.format_exc()}")
+            logger.error(f"Error adding document: {e}\n{traceback.format_exc()}")
             return False
+
+    def search(self, query, top_k=3):
+        """Search for similar documents"""
+        try:
+            if not query or not isinstance(query, str):
+                logger.error("Invalid query for search")
+                return []
+
+            if self.index.ntotal == 0:
+                logger.warning("Database is empty")
+                return []
+
+            # Создаем embedding запроса
+            query_embedding = self.model.encode([query])[0]
+            if query_embedding is None:
+                logger.error("Failed to create embedding for query")
+                return []
+
+            query_embedding = np.array([query_embedding]).astype('float32')
+
+            # Ищем похожие документы
+            try:
+                distances, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
+                logger.info(f"Found {len(indices[0])} documents for query")
+            except Exception as e:
+                logger.error(f"Error searching in index: {e}\n{traceback.format_exc()}")
+                return []
+
+            results = []
+            for idx in indices[0]:
+                if idx >= 0 and idx < len(self.documents):
+                    results.append(self.documents[idx])
+            return results
+        except Exception as e:
+            logger.error(f"Error during search: {e}\n{traceback.format_exc()}")
+            return []
 
     def remove_document(self, document_id):
         """Удаление документа из индекса"""
@@ -203,5 +201,5 @@ class VectorDB:
                 return True
             return False
         except Exception as e:
-            logger.error(f"Ошибка при удалении документа: {str(e)}")
+            logger.error(f"Ошибка при удалении документа: {e}")
             return False

@@ -1,4 +1,4 @@
-from flask import Flask, send_file
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 import logging
@@ -23,7 +23,7 @@ def create_app():
         "pool_recycle": 300,
         "pool_pre_ping": True,
     }
-    app.config["LOGIN_DISABLED"] = True  # Отключаем обязательную авторизацию для тестирования
+    app.config["LOGIN_DISABLED"] = True  # Отключаем обязательную авторизацию
 
     # Инициализация расширений
     db.init_app(app)
@@ -39,9 +39,7 @@ def create_app():
 
         # Инициализация базы данных
         try:
-            # Импортируем модели
-            from app.models import User, Course, Material
-            # Создаем таблицы
+            from app.models import Course, User, Material, MaterialFile, Notification
             db.create_all()
             logger.info("Database tables created successfully")
 
@@ -51,7 +49,8 @@ def create_app():
                 admin = User(
                     username='admin',
                     email='admin@example.com',
-                    is_admin=True
+                    is_admin=True,
+                    telegram_id='12345'  # Добавляем тестовый telegram_id
                 )
                 admin.set_password('admin')
                 db.session.add(admin)
@@ -66,16 +65,30 @@ def create_app():
                     user_id=admin.id
                 )
                 db.session.add(test_course)
+
+                # Добавляем тестовый материал
+                test_material = Material(
+                    course_id=test_course.id,
+                    title='Введение',
+                    content='Это вводный материал тестового курса.'
+                )
+                db.session.add(test_material)
                 db.session.commit()
-                logger.info("Test course created successfully")
+                logger.info("Test course and material created successfully")
 
         except Exception as e:
-            logger.error(f"Error initializing database: {str(e)}")
+            logger.error(f"Error initializing database: {e}", exc_info=True)
             db.session.rollback()
 
         # Регистрация блюпринтов
         from app.routes import main
         app.register_blueprint(main)
+
+        from app.api import api
+        app.register_blueprint(api)
+
+        from app.api.telegram import telegram_api
+        app.register_blueprint(telegram_api)
 
         @login_manager.user_loader
         def load_user(user_id):
