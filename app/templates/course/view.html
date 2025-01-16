@@ -13,21 +13,10 @@
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaterialModal">
                 <i class="bi bi-plus-circle me-2"></i>Добавить материал
             </button>
-            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editCourseModal">
-                <i class="bi bi-pencil me-2"></i>Редактировать курс
-            </button>
-            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteCourseModal">
-                <i class="bi bi-trash me-2"></i>Удалить курс
-            </button>
         </div>
     </div>
 
     <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="bi bi-file-text me-2"></i>Материалы курса
-            </h5>
-        </div>
         <div class="card-body">
             {% if course.materials %}
             <div class="list-group">
@@ -36,11 +25,9 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-1">{{ material.title }}</h5>
                         <div class="btn-group">
-                            <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editMaterialModal{{ material.id }}">
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" 
+                                    data-bs-target="#editMaterialModal{{ material.id }}">
                                 <i class="bi bi-pencil me-1"></i>Редактировать
-                            </button>
-                            <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteMaterialModal{{ material.id }}">
-                                <i class="bi bi-trash me-1"></i>Удалить
                             </button>
                         </div>
                     </div>
@@ -91,61 +78,6 @@
             {% else %}
             <p class="text-muted mb-0">Материалы пока не добавлены</p>
             {% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Модальное окно редактирования курса -->
-<div class="modal fade" id="editCourseModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Редактировать курс</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="{{ url_for('main.edit_course', course_id=course.id) }}">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="title" class="form-label">Название</label>
-                        <input type="text" class="form-control" id="title" name="title" value="{{ course.title }}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="description" class="form-label">Описание</label>
-                        <textarea class="form-control" id="description" name="description" rows="3">{{ course.description }}</textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Сохранить</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Модальное окно удаления курса -->
-<div class="modal fade" id="deleteCourseModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Подтверждение удаления</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы действительно хотите удалить курс "{{ course.title }}"?</p>
-                <p class="text-danger">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    Это действие нельзя отменить. Все материалы и файлы курса также будут удалены.
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <form method="POST" action="{{ url_for('main.delete_course', course_id=course.id) }}">
-                    <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-trash me-2"></i>Удалить
-                    </button>
-                </form>
-            </div>
         </div>
     </div>
 </div>
@@ -203,32 +135,6 @@
                     <button type="submit" class="btn btn-primary">Сохранить</button>
                 </div>
             </form>
-        </div>
-    </div>
-</div>
-
-<!-- Модальное окно для удаления материала -->
-<div class="modal fade" id="deleteMaterialModal{{ material.id }}" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Подтверждение удаления</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы действительно хотите удалить материал "{{ material.title }}"?</p>
-                <p class="text-danger">
-                    <i class="bi bi-exclamation-triangle me-2"></i>Это действие нельзя отменить.
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <form method="POST" action="{{ url_for('main.delete_material', material_id=material.id) }}">
-                    <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-trash me-2"></i>Удалить
-                    </button>
-                </form>
-            </div>
         </div>
     </div>
 </div>

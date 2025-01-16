@@ -4,7 +4,6 @@ from app import db
 import logging
 import os
 from werkzeug.utils import secure_filename
-from app.services.file_processor import FileProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +51,13 @@ def course(course_id):
     """Просмотр курса"""
     try:
         course = Course.query.get_or_404(course_id)
-        return render_template('course.html', course=course)
+        return render_template('course/view.html', course=course)
     except Exception as e:
         logger.error(f"Ошибка при загрузке курса: {str(e)}")
         flash('Произошла ошибка при загрузке курса', 'error')
         return redirect(url_for('main.index'))
 
-@main.route('/course/<int:course_id>/edit', methods=['POST'])
+@main.route('/course/<int:course_id>/edit', methods=['GET', 'POST'])
 def edit_course(course_id):
     """Редактирование курса"""
     try:
@@ -191,40 +190,49 @@ def upload_file(material_id):
                 flash('Неподдерживаемый тип файла. Разрешены только PDF и DOCX', 'error')
                 return redirect(url_for('main.course', course_id=material.course_id))
 
+            # Создаем директорию для файлов материала
             file_dir = os.path.join(os.getcwd(), 'app', 'uploads', str(material_id))
             os.makedirs(file_dir, exist_ok=True)
 
+            # Сохраняем файл
             file_path = os.path.join(file_dir, filename)
             file.save(file_path)
 
-            # Создаем экземпляр FileProcessor с указанием пути к векторной БД
-            processor = FileProcessor(vector_db_path=VECTOR_DB_PATH)
             try:
-                # Обрабатываем файл и добавляем его в векторную БД
+                # Создаем запись в БД
+                material_file = MaterialFile(
+                    material_id=material_id,
+                    filename=filename,
+                    file_path=file_path,
+                    file_type=file_type
+                )
+                db.session.add(material_file)
+                db.session.commit()
+
+                # Создаем экземпляр FileProcessor для индексации
+                from app.services.file_processor import FileProcessor
+                processor = FileProcessor(vector_db_path=VECTOR_DB_PATH)
+
+                # Индексируем файл
                 if processor.process_file(file_path):
-                    # Если файл успешно проиндексирован, создаем запись в БД
-                    material_file = MaterialFile(
-                        material_id=material_id,
-                        filename=filename,
-                        file_path=file_path,
-                        file_type=file_type
-                    )
-                    db.session.add(material_file)
-                    db.session.commit()
+                    logger.info(f"Файл {filename} успешно проиндексирован")
                     flash('Файл успешно загружен и проиндексирован', 'success')
                 else:
+                    logger.warning(f"Ошибка при индексации файла {filename}")
                     flash('Файл загружен, но возникла ошибка при индексации', 'warning')
+
             except Exception as e:
-                logger.error(f"Ошибка при индексации файла: {str(e)}")
-                flash('Файл загружен, но возникла ошибка при индексации', 'warning')
+                logger.error(f"Ошибка при обработке файла: {str(e)}")
+                flash('Произошла ошибка при обработке файла', 'error')
 
             return redirect(url_for('main.course', course_id=material.course_id))
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке файла: {str(e)}")
-        db.session.rollback()
-        flash('Произошла ошибка при загрузке файла', 'error')
-        return redirect(url_for('main.course', course_id=material.course_id))
+        if 'material' in locals():
+            db.session.rollback()
+            return redirect(url_for('main.course', course_id=material.course_id))
+        return redirect(url_for('main.index'))
 
 @main.route('/file/<int:file_id>/download')
 def download_file(file_id):
@@ -292,7 +300,7 @@ def files():
         flash('Произошла ошибка при загрузке данных', 'error')
         return redirect(url_for('main.index'))
 
-@main.route('/material/<int:material_id>/edit', methods=['POST'])
+@main.route('/material/<int:material_id>/edit', methods=['GET', 'POST'])
 def edit_material(material_id):
     """Редактирование материала"""
     try:
