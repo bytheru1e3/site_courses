@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_file
 from app.models import Course, Material, MaterialFile, User, Notification
 from app import db
 from app.services.ai_service import AIService

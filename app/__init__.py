@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 import logging
@@ -36,6 +36,42 @@ def create_app():
         data_dir = os.path.join(app.root_path, 'data')
         os.makedirs(uploads_dir, exist_ok=True)
         os.makedirs(data_dir, exist_ok=True)
+
+        # Инициализация базы данных
+        try:
+            # Импортируем модели
+            from app.models import User, Course, Material
+            # Создаем таблицы
+            db.create_all()
+            logger.info("Database tables created successfully")
+
+            # Создаем тестового админа если его нет
+            admin = User.query.filter_by(username='admin').first()
+            if not admin:
+                admin = User(
+                    username='admin',
+                    email='admin@example.com',
+                    is_admin=True
+                )
+                admin.set_password('admin')
+                db.session.add(admin)
+                db.session.commit()
+                logger.info("Admin user created successfully")
+
+            # Создаем тестовый курс если нет курсов
+            if not Course.query.first():
+                test_course = Course(
+                    title='Тестовый курс',
+                    description='Это тестовый курс для проверки функциональности системы',
+                    user_id=admin.id
+                )
+                db.session.add(test_course)
+                db.session.commit()
+                logger.info("Test course created successfully")
+
+        except Exception as e:
+            logger.error(f"Error initializing database: {str(e)}")
+            db.session.rollback()
 
         # Регистрация блюпринтов
         from app.routes import main
