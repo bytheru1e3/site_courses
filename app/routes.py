@@ -314,3 +314,48 @@ def edit_material(material_id):
         db.session.rollback()
         flash('Произошла ошибка при редактировании материала', 'error')
         return redirect(url_for('main.course', course_id=material.course_id))
+
+
+@main.route('/chat')
+def chat():
+    """Страница чата с ИИ"""
+    try:
+        courses = Course.query.all()
+        return render_template('chat.html', courses=courses)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке страницы чата: {str(e)}")
+        flash('Произошла ошибка при загрузке чата', 'error')
+        return redirect(url_for('main.index'))
+
+@main.route('/chat/ask', methods=['POST'])
+def chat_ask():
+    """Обработка вопросов в чате"""
+    try:
+        data = request.get_json()
+        course_id = data.get('course_id')
+        message = data.get('message')
+
+        if not all([course_id, message]):
+            return jsonify({
+                'success': False,
+                'error': 'Необходимо указать курс и сообщение'
+            }), 400
+
+        # Получаем курс и его материалы для контекста
+        course = Course.query.get_or_404(course_id)
+
+        # Здесь будет логика обработки вопроса через GigaChat
+        # Временный ответ для проверки
+        answer = f"Ваш вопрос по курсу '{course.title}' получен: {message}"
+
+        return jsonify({
+            'success': True,
+            'answer': answer
+        })
+
+    except Exception as e:
+        logger.error(f"Ошибка при обработке вопроса в чате: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Произошла ошибка при обработке вопроса'
+        }), 500
