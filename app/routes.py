@@ -52,7 +52,7 @@ def course(course_id):
     """Просмотр курса"""
     try:
         course = Course.query.get_or_404(course_id)
-        return render_template('course/view.html', course=course)
+        return render_template('course.html', course=course)
     except Exception as e:
         logger.error(f"Ошибка при загрузке курса: {str(e)}")
         flash('Произошла ошибка при загрузке курса', 'error')
@@ -291,3 +291,28 @@ def files():
         logger.error(f"Ошибка при загрузке списка файлов: {str(e)}")
         flash('Произошла ошибка при загрузке данных', 'error')
         return redirect(url_for('main.index'))
+
+@main.route('/material/<int:material_id>/edit', methods=['POST'])
+def edit_material(material_id):
+    """Редактирование материала"""
+    try:
+        material = Material.query.get_or_404(material_id)
+        title = request.form.get('title')
+        content = request.form.get('content', '')
+
+        if not title:
+            flash('Название материала обязательно', 'error')
+            return redirect(url_for('main.course', course_id=material.course_id))
+
+        material.title = title
+        material.content = content
+        db.session.commit()
+
+        flash('Материал успешно обновлен', 'success')
+        return redirect(url_for('main.course', course_id=material.course_id))
+
+    except Exception as e:
+        logger.error(f"Ошибка при редактировании материала: {str(e)}")
+        db.session.rollback()
+        flash('Произошла ошибка при редактировании материала', 'error')
+        return redirect(url_for('main.course', course_id=material.course_id))
