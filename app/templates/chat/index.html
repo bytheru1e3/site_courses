@@ -84,69 +84,59 @@
 
 <!-- JavaScript для обработки чата -->
 <script>
-    // Обработка отправки формы
-    async function handleSubmit(e) {
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('questionForm');
+    const courseSelect = document.getElementById('courseSelect');
+    const questionInput = document.getElementById('questionInput');
+    const chatHistory = document.getElementById('chatHistory');
+
+    form.addEventListener('submit', async function(e) {
         e.preventDefault();
 
-        const courseId = document.getElementById('courseSelect').value;
-        const question = document.getElementById('questionInput').value;
+        const courseId = courseSelect.value;
+        const question = questionInput.value.trim();
 
         if (!courseId) {
             alert('Пожалуйста, выберите курс');
             return;
         }
 
-        if (!question.trim()) {
+        if (!question) {
             alert('Пожалуйста, введите вопрос');
             return;
         }
 
+        // Добавляем сообщение пользователя
+        appendMessage(question, 'user');
+
+        // Очищаем поле ввода
+        questionInput.value = '';
+
         try {
-            // Добавляем сообщение пользователя в чат сразу после отправки
-            appendMessage(question, 'user');
+            const formData = new FormData();
+            formData.append('course_id', courseId);
+            formData.append('question', question);
 
             const response = await fetch('/chat/ask', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'course_id': courseId,
-                    'question': question
-                })
+                body: formData
             });
 
             const data = await response.json();
 
             if (data.success) {
-                // Добавляем ответ ассистента
                 appendMessage(data.answer, 'assistant');
-
-                // Очищаем поле ввода
-                document.getElementById('questionInput').value = '';
             } else {
-                alert(data.error || 'Произошла ошибка при обработке вопроса');
+                appendMessage(data.error || 'Произошла ошибка при обработке вопроса', 'assistant');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Произошла ошибка при отправке вопроса');
-        }
-    }
-
-    // Обработка события отправки формы
-    document.getElementById('questionForm').addEventListener('submit', handleSubmit);
-
-    // Обработка нажатия Enter в текстовом поле
-    document.getElementById('questionInput').addEventListener('keydown', function(e) {
-        // Проверяем, что нажат Enter без Shift
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault(); // Отменяем стандартное поведение
-            handleSubmit(e);
+            appendMessage('Произошла ошибка при отправке вопроса', 'assistant');
         }
     });
 
+    // Функция для добавления сообщения в чат
     function appendMessage(text, role) {
-        const chatHistory = document.getElementById('chatHistory');
         const messageDiv = document.createElement('div');
         messageDiv.className = `message message-${role}`;
         messageDiv.innerHTML = `
@@ -157,5 +147,6 @@
         chatHistory.appendChild(messageDiv);
         chatHistory.scrollTop = chatHistory.scrollHeight;
     }
+});
 </script>
 {% endblock %}
