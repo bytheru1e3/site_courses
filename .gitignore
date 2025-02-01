@@ -19,6 +19,8 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+.replit
+
 
 # Virtual Environment
 .env
@@ -58,4 +60,4 @@ generated-icon*.png
 
 # Vector database files
 *.faiss
-documents.json
+documents.jsonapp/bot/.env

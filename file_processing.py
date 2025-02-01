@@ -15,12 +15,12 @@ def process_pdf(file_path, chunk_size=500, chunk_overlap=100):
 
 def process_docx(file_path, chunk_size=500, chunk_overlap=100):
     try:
-        doc = DocxDocument(file_path)  # Используем правильный класс
+        doc = DocxDocument(file_path)  
         full_text = []
         for para in doc.paragraphs:
             full_text.append(para.text)
         text = '\n'.join(full_text)
-        documents = [Document(page_content=text)]  # Создаем объект Document из langchain
+        documents = [Document(page_content=text)] 
         return RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap).split_documents(documents)
     except BadZipFile:
         raise ValueError("The DOCX file is corrupted or not a valid DOCX file.")
