@@ -7,8 +7,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from app.models import Course, db, User
 from flask import Flask
 import requests
-from app.services.vector_db import VectorDB
-from app.ai import answer_question
+from .ai import VectorDatabase  
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +30,9 @@ class CourseBot:
         self._register_handlers()
         logger.info("Bot handlers registered successfully")
 
-        # Инициализация VectorDB
-        self.vector_db_path = os.path.join(os.getcwd(), "app", "data")
-        logger.info(f"Vector DB path: {self.vector_db_path}")
+        # Инициализация VectorDatabase
+        self.vector_db = VectorDatabase()  # Используем класс VectorDatabase из ai.py
+        logger.info("Vector Database initialized successfully")
 
     def _register_handlers(self):
         """Регистрация обработчиков команд"""
@@ -176,9 +175,10 @@ class CourseBot:
                 await message.reply("🔍 Ищу ответ на ваш вопрос...")
 
                 try:
-                    answer = answer_question(question, self.vector_db_path)
+                    # Используем метод generate_response из VectorDatabase
+                    answer = self.vector_db.generate_response(question)
 
-                    if not answer or "К сожалению, я не нашел информации" in answer:
+                    if not answer or "No relevant information found." in answer:
                         await message.reply(
                             "❌ К сожалению, я не нашел релевантной информации по вашему вопросу.\n"
                             "💡 Попробуйте переформулировать вопрос или задать его иначе.\n\n"
@@ -424,7 +424,7 @@ class CourseBot:
 
     async def send_split_message(self, chat_id: int, text: str, parse_mode=None, reply_markup=None):
         """Отправка длинного сообщения с разбиением на части"""
-        MAX_MESSAGE_LENGTH = 3000  # Maximum length for a single message
+        MAX_MESSAGE_LENGTH = 3000  # Максимальная длина одного сообщения
 
         try:
             if len(text) <= MAX_MESSAGE_LENGTH:
@@ -442,7 +442,7 @@ class CourseBot:
                     parts.append(text)
                     break
 
-                # Find the best split point
+                # Находим лучшую точку разделения
                 split_point = text[:MAX_MESSAGE_LENGTH].rfind('</b>')
                 if split_point == -1:
                     split_point = text[:MAX_MESSAGE_LENGTH].rfind('</i>')
@@ -455,16 +455,16 @@ class CourseBot:
                 if split_point == -1:
                     split_point = MAX_MESSAGE_LENGTH
 
-                # Add part and prepare for next iteration
+                # Добавляем часть и готовимся к следующей итерации
                 part = text[:split_point]
 
-                # Handle HTML tags
+                # Обрабатываем HTML-теги
                 if parse_mode == "HTML":
-                    # Count open tags
+                    # Считаем открытые теги
                     open_b = part.count('<b>') - part.count('</b>')
                     open_i = part.count('<i>') - part.count('</i>')
 
-                    # Close open tags
+                    # Закрываем открытые теги
                     if open_b > 0:
                         part += '</b>' * open_b
                     if open_i > 0:
@@ -472,29 +472,29 @@ class CourseBot:
 
                 parts.append(part)
 
-                # Prepare next part
+                # Готовим следующую часть
                 text = text[split_point:].lstrip()
 
-                # Restore HTML tags for next part
+                # Восстанавливаем HTML-теги для следующей части
                 if parse_mode == "HTML":
                     if open_b > 0:
                         text = '<b>' * open_b + text
                     if open_i > 0:
                         text = '<i>' * open_i + text
 
-            # Send message parts
+            # Отправляем части сообщения
             total_parts = len(parts)
             for i, part in enumerate(parts):
                 try:
-                    # Add part indicator
+                    # Добавляем индикатор части
                     if total_parts > 1:
                         if parse_mode == "HTML":
                             part += f"\n\n<i>📄 Часть {i+1} из {total_parts}</i>"
                         else:
                             part += f"\n\n📄 Часть {i+1} из {total_parts}"
 
-                    # Send with appropriate markup
-                    if i == total_parts - 1:  # Last part
+                    # Отправляем с соответствующим форматированием
+                    if i == total_parts - 1:  # Последняя часть
                         await self.bot.send_message(
                             chat_id=chat_id,
                             text=part,
@@ -508,12 +508,12 @@ class CourseBot:
                             parse_mode=parse_mode
                         )
 
-                    # Add small delay between messages
+                    # Добавляем небольшую задержку между сообщениями
                     if i < total_parts - 1:
                         await asyncio.sleep(0.5)
 
                 except Exception as e:
-                    logger.error(f"Error sending message part {i+1}: {str(e)}")
+                    logger.error(f"Ошибка при отправке части {i+1}: {str(e)}")
                     await self.bot.send_message(
                         chat_id=chat_id,
                         text=f"❌ Ошибка при отправке части {i+1} сообщения",
@@ -521,8 +521,25 @@ class CourseBot:
                     )
 
         except Exception as e:
-            logger.error(f"Error in send_split_message: {str(e)}")
+            logger.error(f"Ошибка в send_split_message: {str(e)}")
             await self.bot.send_message(
                 chat_id=chat_id,
                 text="❌ Произошла ошибка при отправке сообщения"
             )
+
+
+# Запуск бота
+if __name__ == "__main__":
+    from flask import Flask
+    app = Flask(__name__)
+
+    # Инициализация бота
+    bot = CourseBot(app)
+
+    # Запуск бота в асинхронном режиме
+    async def run_bot():
+        await bot.start_polling()
+
+    # Запуск асинхронного цикла
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run_bot())
