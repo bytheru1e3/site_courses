@@ -121,8 +121,7 @@ class CourseBot:
 
     async def list_courses_handler(self, message: types.Message):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📘 Курс 1", callback_data="course_1"),
-             InlineKeyboardButton(text="📘 Курс 2", callback_data="course_2")]
+            [InlineKeyboardButton(text="📘 Курс 1", callback_data="course_1")]
         ])
         await message.answer("📚 Доступные курсы:", reply_markup=keyboard)
 
