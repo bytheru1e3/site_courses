@@ -55,8 +55,7 @@ class CourseBot:
 
     async def ask_handler(self, message: types.Message):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📘 Курс 1", callback_data="ask_course_1"),
-             InlineKeyboardButton(text="📘 Курс 2", callback_data="ask_course_2")]
+            [InlineKeyboardButton(text="📘 Курс 1", callback_data="ask_course_1")]
         ])
         await message.answer("📚 Выберите курс:", reply_markup=keyboard)
 
