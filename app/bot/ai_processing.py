@@ -95,8 +95,8 @@ class VectorDatabase:
     def generate_response(self, query: str) -> str:
         # Поиск и ранжирование документов
         bm25_retriever = BM25Retriever.from_documents(self.texts)
-        bm25_retriever.k = 10
-        faiss_retriever = self.vector_db.as_retriever(search_kwargs={"k": 5})
+        bm25_retriever.k = 20
+        faiss_retriever = self.vector_db.as_retriever(search_kwargs={"k": 25})
         ensemble_retriever = EnsembleRetriever(
             retrievers=[bm25_retriever, faiss_retriever],
             weights=[0.4, 0.6]
@@ -122,5 +122,5 @@ class VectorDatabase:
         prompt = ChatPromptTemplate.from_template(template)
         chain = LLMChain(llm=self.llm, prompt=prompt)
         
-        context = "\n".join([f"- {doc}" for _, doc in filtered_pairs[:3]])
+        context = "\n".join([f"- {doc}" for _, doc in filtered_pairs[:5]])
         return chain.run({'context': context, 'question': query})
