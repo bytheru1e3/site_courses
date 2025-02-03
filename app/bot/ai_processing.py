@@ -114,10 +114,12 @@ class VectorDatabase:
             return "К сожалению, релевантной информации не найдено."
 
         # Генерация ответа
-        template = '''Ответь на вопрос используя контекст:
-        Контекст: {context}
-        Вопрос: {question}
-        Ответ:'''
+        template = '''Ответь на вопрос пользователя. \
+                    Используй при этом только информацию из контекста. Если в контексте нет \
+                    информации для ответа, сообщи об этом пользователю.
+                    Контекст: {context}
+                    Вопрос: {question}
+                    Ответ:'''
         
         prompt = ChatPromptTemplate.from_template(template)
         chain = LLMChain(llm=self.llm, prompt=prompt)

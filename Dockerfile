@@ -1,18 +1,10 @@
-# Используем более легкий базовый образ
-FROM python:3.10-slim
+# Используем официальный образ Python
+FROM python:3.10-slim-buster
 
-# Добавляем публичные ключи для репозиториев Debian
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gnupg \
-    && apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0E98404D386FA1D9 6ED0E7B82643E131 F8D2585B8783D481 54404762BBB6E853 BDE6D2B9216EC7A8 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Устанавливаем системные зависимости и удаляем кеши
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Устанавливаем системные зависимости
+RUN apt-get update && apt-get install -y \
     build-essential \
     git \
-    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Настраиваем рабочую директорию
@@ -21,13 +13,16 @@ WORKDIR /app
 # Копируем зависимости
 COPY requirements.txt .
 
-# Устанавливаем Python-зависимости и удаляем кеши
+# Устанавливаем Python-зависимости
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    rm -rf /root/.cache/pip
+    pip install --no-cache-dir -r requirements.txt
 
-# Копируем остальные файлы проекта
+# Копируем исходный код
 COPY . .
 
-# Указываем команду запуска контейнера
-CMD ["python", "app.py"]
+# Создаем директории для данных
+RUN mkdir -p /app/data/vector_db_cache && \
+    mkdir -p /app/uploads
+
+# Запускаем бота
+CMD ["python", "run_bot.py"]
