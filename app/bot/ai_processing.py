@@ -107,7 +107,7 @@ class VectorDatabase:
         documents = [doc.page_content for doc in result_doc]
         pairs = [[query, doc] for doc in documents]
         scores = self.cross_encoder.predict(pairs)
-        filtered_pairs = [(score, doc) for score, doc in zip(scores, documents)]
+        filtered_pairs = [(score, doc) for score, doc in zip(scores, documents) if score >= 0.01]
         filtered_pairs.sort(key=lambda x: x[0], reverse=True)
         
         if not filtered_pairs:
