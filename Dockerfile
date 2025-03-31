@@ -5,7 +5,7 @@ FROM python:3.10-slim-buster
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    libgomp1 && rm -rf /var/lib/apt/lists/*
 
 # Настраиваем рабочую директорию
 WORKDIR /app
