@@ -20,7 +20,7 @@ class VectorDatabase:
         self.cross_encoder = CrossEncoder('DiTy/cross-encoder-russian-msmarco')
         self.llm = self._init_gigachat()
         self._initialize_embeddings()
-        self._load_or_create_vector_db()
+        self._load_vector_db()
 
     def _init_gigachat(self):
         return GigaChat(
@@ -46,55 +46,29 @@ class VectorDatabase:
     def _get_file_hash(self):
         return hashlib.md5(Path(self.file_path).read_bytes()).hexdigest()
 
-    def _load_or_create_vector_db(self):
-        cache_dir = os.path.join("data", "vector_db_cache")
-        index_file = f"{cache_dir}/faiss_index"
-        hash_file = f"{cache_dir}/file_hash"
-        meta_file = f"{cache_dir}/meta.json"
+    def _load_vector_db(self):
+    cache_dir = os.path.join("data", "vector_db_cache")
+    index_file = f"{cache_dir}/faiss_index"
+    hash_file = f"{cache_dir}/file_hash"
 
-        current_hash = self._get_file_hash()
-        os.makedirs(cache_dir, exist_ok=True)
+    current_hash = self._get_file_hash()
+    os.makedirs(cache_dir, exist_ok=True)
 
-        if os.path.exists(index_file) and os.path.exists(hash_file):
-            with open(hash_file, 'r') as f:
-                cached_hash = f.read().strip()
-            
-            if current_hash == cached_hash:
-                self.vector_db = FAISS.load_local(
-                    folder_path=cache_dir,
-                    embeddings=self.embeddings,
-                    index_name="faiss_index"
-                )
-                with open(self.file_path, 'r') as f:
-                    doc_text = f.read()
-                self.texts = RecursiveCharacterTextSplitter(
-                    chunk_size=500,
-                    chunk_overlap=100,
-                    separators=["\n"]
-                ).create_documents([doc_text])
-                print("✓ Загружена кэшированная векторная база")
-                return
-
-        # Создаем новую базу если кэш устарел
-        with open(self.file_path, 'r') as f:
-            doc_text = f.read()
-
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=100,
-            separators=["\n"]
-        )
-        self.texts = text_splitter.create_documents([doc_text])
-        self.vector_db = FAISS.from_documents(self.texts, self.embeddings)
+    if os.path.exists(index_file) and os.path.exists(hash_file):
+        with open(hash_file, 'r') as f:
+            cached_hash = f.read().strip()
         
-        # Сохраняем новую версию
-        self.vector_db.save_local(
-            folder_path=cache_dir,
-            index_name="faiss_index"
-        )
-        with open(hash_file, 'w') as f:
-            f.write(current_hash)
-        print("✓ Создана новая векторная база")
+        if current_hash == cached_hash:
+            self.vector_db = FAISS.load_local(
+                folder_path=cache_dir,
+                embeddings=self.embeddings,
+                index_name="faiss_index"
+            )
+            print("✓ Загружена кэшированная векторная база")
+            return True
+    
+    print("× Векторная база не загружена")
+    return False
 
     def generate_response(self, query: str) -> str:
         # Поиск и ранжирование документов
@@ -118,7 +92,13 @@ class VectorDatabase:
         result_doc = [doc for _, doc in combined_results]
 
         # Ранжирование результатов
-        documents = [doc.page_content for doc in result_doc]
+        #documents = [doc.page_content for doc in result_doc]
+
+        documents = [
+                    f"- {doc.page_content} (Ссылка: {doc.metadata.get('Ссылка на видео', 'Нет ссылки')}={doc.metadata.get('time', 'Нет времени')})"
+                    for doc in result_doc
+                    ]
+
         pairs = [[query, doc] for doc in documents]
         scores = self.cross_encoder.predict(pairs)
         filtered_pairs = [(score, doc) for score, doc in zip(scores, documents) if score >= 0.01]
@@ -145,16 +125,12 @@ class VectorDatabase:
  • “Чтобы ответить, нужен дополнительный контекст.”
 
 Контекст: {context}
-Вопрос: {query}
+Вопрос: {question}
 Ответ:'''
         
         prompt = ChatPromptTemplate.from_template(template)
         chain = LLMChain(llm=self.llm, prompt=prompt)
         
-        #context = "\n".join([f"- {doc}" for _, doc in filtered_pairs[:1]])
+        context = "\n".join([f"- {doc}" for _, doc in filtered_pairs[:3]])
 
-        context = "\n".join([
-            f"- {doc.page_content} (Ссылка: {doc.metadata.get('Ссылка на видео', 'Нет ссылки')}={doc.metadata.get('time', 'Нет времени')})"
-            for doc in search_faiss_retriever[:5]
-            ])
         return chain.run({'context': context, 'question': query})
