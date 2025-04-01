@@ -51,7 +51,6 @@ class VectorDatabase:
     index_file = f"{cache_dir}/faiss_index"
     hash_file = f"{cache_dir}/file_hash"
 
-    current_hash = self._get_file_hash()
     os.makedirs(cache_dir, exist_ok=True)
 
     if os.path.exists(index_file) and os.path.exists(hash_file):
