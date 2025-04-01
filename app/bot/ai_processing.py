@@ -17,10 +17,10 @@ class VectorDatabase:
         self.embeddings = None
         self.vector_db = None
         self.texts = []
-        self.cross_encoder = CrossEncoder('DiTy/cross-encoder-russian-msmarco')
+        #self.cross_encoder = CrossEncoder('DiTy/cross-encoder-russian-msmarco')
         self.llm = self._init_gigachat()
+        self._load_or_create_vector_db()
         self._initialize_embeddings()
-        self._load_vector_db()
 
     def _init_gigachat(self):
         return GigaChat(
@@ -43,68 +43,75 @@ class VectorDatabase:
             print(f"Ошибка при инициализации модели: {e}")
             raise
 
-    def _get_file_hash(self):
-        return hashlib.md5(Path(self.file_path).read_bytes()).hexdigest()
+#    def _get_file_hash(self):
+#        return hashlib.md5(Path(self.file_path).read_bytes()).hexdigest()
 
-    def _load_vector_db(self):
-    cache_dir = os.path.join("data", "vector_db_cache")
-    index_file = f"{cache_dir}/faiss_index"
-    hash_file = f"{cache_dir}/file_hash"
+    def _load_or_create_vector_db(self):
+        cache_dir = os.path.join("data", "vector_db_cache")
+        index_file = f"{cache_dir}/faiss_index"
 
-    os.makedirs(cache_dir, exist_ok=True)
+        os.makedirs(cache_dir, exist_ok=True)
 
-    if os.path.exists(index_file) and os.path.exists(hash_file):
-        with open(hash_file, 'r') as f:
-            cached_hash = f.read().strip()
-        
-        if current_hash == cached_hash:
+        #current_hash = self._get_file_hash()
+        #os.makedirs(cache_dir, exist_ok=True)
+
+        #if os.path.exists(index_file) and os.path.exists(hash_file):
+        #    with open(hash_file, 'r') as f:
+        #        cached_hash = f.read().strip()
+            
+        #    if current_hash == cached_hash:
+        try:
             self.vector_db = FAISS.load_local(
                 folder_path=cache_dir,
                 embeddings=self.embeddings,
-                index_name="faiss_index"
+                index_name="faiss_index",
+                allow_dangerous_deserialization=True
             )
-            print("✓ Загружена кэшированная векторная база")
+            print("✓ Векторная база успешно загружена")
             return True
-    
-    print("× Векторная база не загружена")
-    return False
+        except Exception as e:
+            print(f"× Ошибка загрузки векторной базы: {str(e)}")
+            self.vector_db = None  # Явно устанавливаем None при ошибке
+            return False
 
     def generate_response(self, query: str) -> str:
         # Поиск и ранжирование документов
         #bm25_retriever = BM25Retriever.from_documents(self.texts)
         #bm25_retriever.k = 20
-        faiss_retriever = self.vector_db.as_retriever(search_kwargs={"k": 25})
+
+        #faiss_retriever = self.vector_db.as_retriever(search_kwargs={"k": 25})
         
         # Объединение результатов вручную
         #bm25_results = bm25_retriever.get_relevant_documents(query)
-        faiss_results = faiss_retriever.get_relevant_documents(query)
-        
+        faiss_results = self.vector_db.similarity_search(query, k=5)
+
+       
         # Присваиваем веса и объединяем
-        combined_results = []
+        #combined_results = []
         #for doc in bm25_results:
         #    combined_results.append((0.4, doc))
-        for doc in faiss_results:
-            combined_results.append((0.6, doc))
+        #for doc in faiss_results:
+        #    combined_results.append((1, doc))
         
         # Сортируем по весу
-        combined_results.sort(key=lambda x: x[0], reverse=True)
-        result_doc = [doc for _, doc in combined_results]
+        #combined_results.sort(key=lambda x: x[0], reverse=True)
+        #result_doc = [doc for _, doc in combined_results]
 
         # Ранжирование результатов
         #documents = [doc.page_content for doc in result_doc]
 
         documents = [
                     f"- {doc.page_content} (Ссылка: {doc.metadata.get('Ссылка на видео', 'Нет ссылки')}={doc.metadata.get('time', 'Нет времени')})"
-                    for doc in result_doc
+                    for doc in faiss_results
                     ]
 
-        pairs = [[query, doc] for doc in documents]
-        scores = self.cross_encoder.predict(pairs)
-        filtered_pairs = [(score, doc) for score, doc in zip(scores, documents) if score >= 0.01]
-        filtered_pairs.sort(key=lambda x: x[0], reverse=True)
+        #pairs = [[query, doc] for doc in documents]
+        #scores = self.cross_encoder.predict(pairs)
+        #filtered_pairs = [(score, doc) for score, doc in zip(scores, documents) if score >= 0.01]
+        #filtered_pairs.sort(key=lambda x: x[0], reverse=True)
         
-        if not filtered_pairs:
-            return "К сожалению, релевантной информации не найдено."
+        #if not filtered_pairs:
+        #    return "К сожалению, релевантной информации не найдено."
 
         # Генерация ответа
         template = '''Роль: Интеллектуальный помощник, отвечающий строго по контексту.
@@ -130,6 +137,6 @@ class VectorDatabase:
         prompt = ChatPromptTemplate.from_template(template)
         chain = LLMChain(llm=self.llm, prompt=prompt)
         
-        context = "\n".join([f"- {doc}" for _, doc in filtered_pairs[:3]])
+        context = "\n".join([f"- {doc}" for _, doc in documents[:3]])
 
         return chain.run({'context': context, 'question': query})
